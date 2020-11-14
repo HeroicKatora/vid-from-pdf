@@ -1,4 +1,4 @@
-use std::{fmt, io::Write as _};
+use std::{env, fmt, ffi::OsString, io::Write as _, path::Path};
 use tempfile::TempDir;
 use which::CanonicalPath;
 
@@ -9,6 +9,8 @@ use crate::ffmpeg::Ffmpeg;
 /// Command line and environment provided configuration.
 pub struct Configuration {
     stdout: std::io::Stdout,
+    this: Option<OsString>,
+    verbose: bool,
 }
 
 pub struct Resources {
@@ -57,14 +59,80 @@ impl Resources {
 }
 
 impl Configuration {
-    pub fn from_env() -> Self {
-        Configuration {
-            stdout: std::io::stdout(),
+    pub fn from_env() -> Result<Self, FatalError> {
+        enum HowToParse {
+            CurrentProgram,
+            ExpectArg,
         }
+
+        let mut cfg = Configuration {
+            stdout: std::io::stdout(),
+            this: None,
+            verbose: false,
+        };
+
+
+        let mut how = HowToParse::CurrentProgram;
+        for arg in env::args_os() {
+            match how {
+                HowToParse::CurrentProgram => cfg.this = Some(arg),
+                HowToParse::ExpectArg => match arg.to_str() {
+                    Some("-v") | Some("-verbose") => cfg.verbose = true,
+                    Some("-h") | Some("-help") | Some("--help") => cfg.bail_help()?,
+                    Some(other) => cfg.bail_unknown_argument(other)?,
+                    None => cfg.bail_bad_argument(arg)?,
+                }
+            }
+
+            how = HowToParse::ExpectArg;
+        }
+
+        Ok(cfg)
     }
 
     fn new_tempdir(&self) -> Result<TempDir, std::io::Error> {
         TempDir::new()
+    }
+
+    // TODO: want to use `Result<!, FatalError>` here.
+    fn bail_unknown_argument(&mut self, arg: &str) -> Result<(), FatalError> {
+        writeln!(&mut self.stdout, "Unknown argument `{}`", arg)?;
+        self.print_help()?;
+        std::process::exit(1);
+    }
+
+    fn bail_bad_argument(&mut self, arg: OsString) -> Result<(), FatalError> {
+        writeln!(&mut self.stdout, "Os Argument is invalid `{}`", Path::new(&arg).display())?;
+        std::process::exit(1);
+    }
+
+    fn bail_help(&mut self) -> Result<(), FatalError> {
+        self.print_help()?;
+        std::process::exit(2);
+    }
+
+    fn print_help(&mut self) -> Result<(), FatalError> {
+        let (mut path, mut or_other_name);
+        writeln!(&mut self.stdout, "Usage: {} [OPTION...]", {
+            match &self.this {
+                Some(this) => {
+                    path = Path::new(this).display();
+                    &mut path as &mut dyn fmt::Display
+                }
+                None => {
+                    or_other_name = "vid-from-pdf";
+                    &mut or_other_name as &mut dyn fmt::Display
+                }
+            }
+        })?;
+        writeln!(&mut self.stdout, "")?;
+        writeln!(&mut self.stdout, "Options:\n\
+            \t-verbose  \tPrint debug information\n\
+            \t-h\n\
+            \t-help\n\
+            \t--help    \tPrint this help"
+        )?;
+        Ok(())
     }
 
     fn error_reporter(&self) -> ErrorReporter<'_> {

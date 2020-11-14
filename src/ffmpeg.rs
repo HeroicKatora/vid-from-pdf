@@ -1,4 +1,4 @@
-use std::{fmt, process::Command};
+use std::{fmt, process::Command, process::Stdio};
 use which::CanonicalPath;
 
 use crate::resources::{RequiredToolError, require_tool};
@@ -31,6 +31,9 @@ impl Ffmpeg {
 
         // TODO: minimum version requirements?
         let version = Command::new(&ffmpeg)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .arg("-version")
             .output()
             .map_err(LoadFfmpegError::io_error)
@@ -41,6 +44,10 @@ impl Ffmpeg {
         match {
             Command::new(&ffprobe)
                 .arg("-version")
+                // do not inherit any input or output
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
                 .status()
                 .map(|status| status.success())
         } {
