@@ -1,6 +1,9 @@
 use std::{io, fs, path::PathBuf};
+use index_ext::Int;
+use serde::{Serialize, Deserialize};
 
 use crate::FatalError;
+use crate::app::App;
 use crate::sink::{Sink, Identifier};
 
 /// A video project.
@@ -12,6 +15,7 @@ pub struct Project {
     pub meta: Meta,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Meta {
     pub source: PathBuf,
 }
@@ -40,6 +44,7 @@ impl Project {
 
     /// Open an existing directory as a project.
     pub fn load(
+        app: &App,
         in_dir: PathBuf,
         project_id: Identifier,
     ) -> Result<Option<Self>, FatalError> {
@@ -51,7 +56,24 @@ impl Project {
         }
 
         let sink = Sink::new(unique_path)?;
-        let meta = todo!();
+        let meta = {
+            use io::Read;
+            // TODO: cap read at some limit here?
+            let meta = fs::File::open(sink.work_dir().join(".project"))?;
+            let mut data = vec![];
+            let max_len = app.limits.meta_size();
+            meta.take(max_len).read_to_end(&mut data)?;
+
+            if data.get_int(..max_len).is_some() {
+                Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "excessive project meta data file",
+                ))?;
+            }
+
+            serde_json::from_slice(data.as_slice())
+                .map_err(FatalError::Corrupt)?
+        };
 
         Ok(Some(Project {
             dir: sink,

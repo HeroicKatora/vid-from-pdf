@@ -1,4 +1,5 @@
 mod app;
+mod cli;
 mod explode;
 mod ffmpeg;
 mod project;
@@ -36,11 +37,15 @@ fn main() -> Result<(), FatalError> {
         }
             
     }
+    let app = app::App::new(resources);
+    cli::tui(app)?;
     Ok(())
 }
 
 pub enum FatalError {
     Io(std::io::Error),
+    /// A corrupt, __internal__ data dump.
+    Corrupt(serde_json::Error),
 }
 
 impl From<std::io::Error> for FatalError {
@@ -54,7 +59,8 @@ impl fmt::Debug for FatalError {
         writeln!(f, "The program will quit due to a fatal error.")?;
         writeln!(f, "This should never happen and might be caused by a bad installation.")?;
         match self {
-            FatalError::Io(io) => write!(f, "{:?}", io),
+            FatalError::Io(io) => write!(f, "I/O error: {:?}", io),
+            FatalError::Corrupt(err) => write!(f, "Corrupt data structure: {:?}", err),
         }
     }
 }
