@@ -1,0 +1,11 @@
+[package]
+name = "vid-from-pdf"
+version = "1.0.0-alpha"
+authors = ["Andreas Molzer <andreas.molzer@gmx.de>"]
+edition = "2018"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+tempfile = "3"
+versions = "2"
+which = "4"
