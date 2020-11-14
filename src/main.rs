@@ -7,6 +7,7 @@ mod resources;
 mod sink;
 
 use std::fmt;
+use std::io::Write as _;
 
 static COMPRESSED_DEPENDENCY_LIST: &[u8] = auditable::inject_dependency_list!();
 
@@ -14,7 +15,6 @@ fn main() -> Result<(), FatalError> {
     let mut cfg = resources::Configuration::from_env()?;
     let resources = resources::Resources::force(&cfg)?;
     if cfg.verbose {
-        use std::io::Write as _;
         writeln!(cfg.stderr, "Using ffmpeg")?;
         writeln!(cfg.stderr, " ffmpeg: {}", resources.ffmpeg.ffmpeg.as_path().display())?;
         writeln!(cfg.stderr, " ffprobe: {}", resources.ffmpeg.ffprobe.as_path().display())?;
@@ -39,6 +39,7 @@ fn main() -> Result<(), FatalError> {
     }
     let app = app::App::new(resources);
     cli::tui(app)?;
+    writeln!(cfg.stdout, "")?;
     Ok(())
 }
 

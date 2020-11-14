@@ -18,6 +18,13 @@ pub struct Project {
 #[derive(Serialize, Deserialize)]
 pub struct Meta {
     pub source: PathBuf,
+    pub slides: Vec<Slide>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Slide {
+    pub visual: PathBuf,
+    pub audio: PathBuf,
 }
 
 impl Project {
@@ -31,15 +38,17 @@ impl Project {
 
         let meta = Meta {
             source: sink.store_to_file(from)?,
+            slides: vec![],
         };
 
-        // TODO: store meta to disk.
-
-        Ok(Project {
+        let project = Project {
             dir: sink,
             project_id: unique.identifier,
             meta,
-        })
+        };
+
+        project.store()?;
+        Ok(project)
     }
 
     /// Open an existing directory as a project.
@@ -59,7 +68,8 @@ impl Project {
         let meta = {
             use io::Read;
             // TODO: cap read at some limit here?
-            let meta = fs::File::open(sink.work_dir().join(".project"))?;
+            let file = sink.work_dir().join(Self::PROJECT_META);
+            let meta = fs::File::open(file)?;
             let mut data = vec![];
             let max_len = app.limits.meta_size();
             meta.take(max_len).read_to_end(&mut data)?;
@@ -81,4 +91,16 @@ impl Project {
             meta,
         }))
     }
+
+    pub fn store(&self) -> Result<(), FatalError> {
+        let file = self.dir.work_dir().join(Self::PROJECT_META);
+        let meta = fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open(file)?;
+        serde_json::to_writer(meta, &self.meta).map_err(io::Error::from)?;
+        Ok(())
+    }
+
+    const PROJECT_META: &'static str = ".project";
 }
