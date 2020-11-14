@@ -5,6 +5,8 @@ mod sink;
 
 use std::fmt;
 
+static COMPRESSED_DEPENDENCY_LIST: &[u8] = auditable::inject_dependency_list!();
+
 fn main() -> Result<(), FatalError> {
     let mut cfg = resources::Configuration::from_env()?;
     let resources = resources::Resources::force(&cfg)?;
@@ -17,6 +19,20 @@ fn main() -> Result<(), FatalError> {
         writeln!(cfg.stderr, "Using temporary directory")?;
         writeln!(cfg.stderr, " path: {}", resources.tempdir.path().display())?;
         resources.explode.verbose_describe(&mut cfg.stderr)?;
+
+        writeln!(cfg.stderr, "There is `auditable` information")?;
+        if let Some(_) = std::env::var_os("VID_FROM_PDF_DUMP_AUDITABLE") {
+            // Firstly, this actually uses the `COMPRESSED_DEPENDENCY_LIST` ensuring it is not
+            // removed during a linker stage. Secondly, maybe it's useful.
+            writeln!(cfg.stderr, " Dumping as a C-compatible escape byte array.")?;
+            let mut locked = cfg.stderr.lock();
+            write!(locked, "'")?;
+            for &ch in COMPRESSED_DEPENDENCY_LIST {
+                write!(locked, "{}", std::ascii::escape_default(ch))?;
+            }
+            write!(locked, "'")?;
+        }
+            
     }
     Ok(())
 }

@@ -4,9 +4,14 @@ version = "1.0.0-alpha"
 authors = ["Andreas Molzer <andreas.molzer@gmx.de>"]
 edition = "2018"
 license = "AGPL-3.0-or-later"
+build = "build.rs"
 
 [dependencies]
+auditable = "0.1"
 rand = "0.7"
 tempfile = "3"
 versions = "2"
 which = "4"
+
+[build-dependencies]
+auditable-build = "0.1"
