@@ -6,9 +6,18 @@ mod sink;
 use std::fmt;
 
 fn main() -> Result<(), FatalError> {
-    let config = resources::Configuration::from_env()?;
-    let resources = resources::Resources::force(&config);
-    let _ = resources;
+    let mut cfg = resources::Configuration::from_env()?;
+    let resources = resources::Resources::force(&cfg)?;
+    if cfg.verbose {
+        use std::io::Write as _;
+        writeln!(cfg.stderr, "Using ffmpeg")?;
+        writeln!(cfg.stderr, " ffmpeg: {}", resources.ffmpeg.ffmpeg.as_path().display())?;
+        writeln!(cfg.stderr, " ffprobe: {}", resources.ffmpeg.ffprobe.as_path().display())?;
+        writeln!(cfg.stderr, " version: {}", resources.ffmpeg.version.version)?;
+        writeln!(cfg.stderr, "Using temporary directory")?;
+        writeln!(cfg.stderr, " path: {}", resources.tempdir.path().display())?;
+        resources.explode.verbose_describe(&mut cfg.stderr)?;
+    }
     Ok(())
 }
 

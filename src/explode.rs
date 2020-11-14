@@ -8,6 +8,7 @@ use crate::resources::{RequiredToolError, require_tool};
 
 pub trait ExplodePdf: Send + Sync + 'static {
     fn explode(&self, src: &mut dyn Source, into: &mut Sink) -> Result<(), FatalError>;
+    fn verbose_describe(&self, into: &mut dyn io::Write) -> Result<(), FatalError>;
 }
 
 pub trait Source {
@@ -26,6 +27,12 @@ pub enum LoadPdfExploderError {
 impl ExplodePdf for PdfToPpm {
     fn explode(&self, src: &mut dyn Source, sink: &mut Sink) -> Result<(), FatalError> {
         PdfToPpm::explode(self, src, sink)
+    }
+
+    fn verbose_describe(&self, into: &mut dyn io::Write) -> Result<(), FatalError> {
+        writeln!(into, "Using pdftoppm to deconstruct pdf")?;
+        writeln!(into, " pdftoppm: {}", self.exe.display())?;
+        Ok(())
     }
 }
 

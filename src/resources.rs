@@ -8,15 +8,16 @@ use crate::ffmpeg::Ffmpeg;
 
 /// Command line and environment provided configuration.
 pub struct Configuration {
-    stdout: std::io::Stdout,
-    this: Option<OsString>,
-    verbose: bool,
+    pub stdout: std::io::Stdout,
+    pub stderr: std::io::Stderr,
+    pub this: Option<OsString>,
+    pub verbose: bool,
 }
 
 pub struct Resources {
-    ffmpeg: Ffmpeg,
-    tempdir: TempDir,
-    explode: Box<dyn ExplodePdf>,
+    pub ffmpeg: Ffmpeg,
+    pub tempdir: TempDir,
+    pub explode: Box<dyn ExplodePdf>,
 }
 
 pub struct RequiredToolError {
@@ -25,7 +26,7 @@ pub struct RequiredToolError {
 }
 
 struct ErrorReporter<'dis> {
-    into: std::io::StdoutLock<'dis>,
+    into: std::io::StderrLock<'dis>,
     not_found: Vec<&'dis dyn std::fmt::Display>,
 }
 
@@ -67,6 +68,7 @@ impl Configuration {
 
         let mut cfg = Configuration {
             stdout: std::io::stdout(),
+            stderr: std::io::stderr(),
             this: None,
             verbose: false,
         };
@@ -96,13 +98,13 @@ impl Configuration {
 
     // TODO: want to use `Result<!, FatalError>` here.
     fn bail_unknown_argument(&mut self, arg: &str) -> Result<(), FatalError> {
-        writeln!(&mut self.stdout, "Unknown argument `{}`", arg)?;
+        writeln!(&mut self.stderr, "Unknown argument `{}`", arg)?;
         self.print_help()?;
         std::process::exit(1);
     }
 
     fn bail_bad_argument(&mut self, arg: OsString) -> Result<(), FatalError> {
-        writeln!(&mut self.stdout, "Os Argument is invalid `{}`", Path::new(&arg).display())?;
+        writeln!(&mut self.stderr, "Os Argument is invalid `{}`", Path::new(&arg).display())?;
         std::process::exit(1);
     }
 
@@ -113,7 +115,7 @@ impl Configuration {
 
     fn print_help(&mut self) -> Result<(), FatalError> {
         let (mut path, mut or_other_name);
-        writeln!(&mut self.stdout, "Usage: {} [OPTION...]", {
+        writeln!(&mut self.stderr, "Usage: {} [OPTION...]", {
             match &self.this {
                 Some(this) => {
                     path = Path::new(this).display();
@@ -125,8 +127,8 @@ impl Configuration {
                 }
             }
         })?;
-        writeln!(&mut self.stdout, "")?;
-        writeln!(&mut self.stdout, "Options:\n\
+        writeln!(&mut self.stderr, "")?;
+        writeln!(&mut self.stderr, "Options:\n\
             \t-verbose  \tPrint debug information\n\
             \t-h\n\
             \t-help\n\
@@ -137,7 +139,7 @@ impl Configuration {
 
     fn error_reporter(&self) -> ErrorReporter<'_> {
         ErrorReporter {
-            into: self.stdout.lock(),
+            into: self.stderr.lock(),
             not_found: vec![],
         }
     }

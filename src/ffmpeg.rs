@@ -5,17 +5,17 @@ use crate::resources::{RequiredToolError, require_tool};
 
 pub struct Ffmpeg {
     /// The main ffmpeg executable.
-    ffmpeg: CanonicalPath,
+    pub ffmpeg: CanonicalPath,
     /// The main ffprobe executable.
-    ffprobe: CanonicalPath,
+    pub ffprobe: CanonicalPath,
     /// Proof type that we understand the versioning.
     /// Also extension if we ever care about loading the configuration, inspecting details of
     /// libavutils and plugins, etc.
-    version: Version,
+    pub version: Version,
 }
 
 pub struct Version {
-    version: versions::Version,
+    pub version: versions::Version,
 }
 
 pub enum LoadFfmpegError {
