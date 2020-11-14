@@ -38,11 +38,16 @@ impl Ffmpeg {
 
         // We don't really care for version. ffprobe should be distributed with ffmpeg so let's
         // assume that if it is present then it is generally the same.
-        let has_ffprobe = Command::new(&ffprobe)
-            .arg("-version")
-            .status()
-            .map(|status| status.success())
-            .unwrap_or(false);
+        match {
+            Command::new(&ffprobe)
+                .arg("-version")
+                .status()
+                .map(|status| status.success())
+        } {
+            Ok(true) => {},
+            Ok(false) => return Err(LoadFfmpegError::VersionNumberIsGibberish),
+            Err(err) => return Err(LoadFfmpegError::io_error(err)),
+        }
 
         Ok(Ffmpeg {
             ffmpeg,
@@ -53,8 +58,9 @@ impl Ffmpeg {
 }
 
 impl LoadFfmpegError {
-    fn io_error(err: std::io::Error) -> Self {
-        todo!()
+    fn io_error(_: std::io::Error) -> Self {
+        // TODO: really? Maybe this should be fatal somehow.
+        LoadFfmpegError::VersionNumberIsGibberish
     }
 }
 

@@ -2,6 +2,7 @@ use std::{fmt, io::Write as _};
 use tempfile::TempDir;
 use which::CanonicalPath;
 
+use crate::FatalError;
 use crate::explode::ExplodePdf;
 use crate::ffmpeg::Ffmpeg;
 
@@ -29,7 +30,7 @@ struct ErrorReporter<'dis> {
 impl Resources {
     /// Load and inspect all required resources and optional resources and panic if it is not
     /// possible to arrive at a suitable configuration.
-    pub fn force(cfg: &Configuration) -> Self {
+    pub fn force(cfg: &Configuration) -> Result<Self, FatalError> {
         // First, try and load all parts. Then give a condensed message with all missing parts.
         let ffmpeg = Ffmpeg::new();
         let tempdir = cfg.new_tempdir();
@@ -45,13 +46,13 @@ impl Resources {
         if let Err(err) = &explode {
             report.eat_err(err);
         }
-        report.assert();
+        report.assert()?;
 
-        Resources {
+        Ok(Resources {
             ffmpeg: ffmpeg.unwrap_or_else(|_| unreachable!()),
             tempdir: tempdir.unwrap_or_else(|_| unreachable!()),
             explode: explode.unwrap_or_else(|_| unreachable!()),
-        }
+        })
     }
 }
 
@@ -80,14 +81,14 @@ impl<'dis> ErrorReporter<'dis> {
     }
 
     /// Require that no errors occurred.
-    fn assert(mut self) {
+    fn assert(mut self) -> Result<(), FatalError> {
         if self.not_found.is_empty() {
-            return;
+            return Ok(());
         }
 
-        write!(self.into, "Some require tools could not be found or are too old. Please install them.");
+        write!(self.into, "Some require tools could not be found or are too old. Please install them.")?;
         for err in self.not_found {
-            write!(self.into, " {}", err);
+            write!(self.into, " {}", err)?;
         }
         std::process::exit(1);
     }

@@ -243,6 +243,7 @@ dependencies = [
 name = "vid-from-pdf"
 version = "1.0.0-alpha"
 dependencies = [
+ "rand",
  "tempfile",
  "versions",
  "which",
