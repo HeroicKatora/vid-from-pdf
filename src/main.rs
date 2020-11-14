@@ -1,5 +1,7 @@
+mod app;
 mod explode;
 mod ffmpeg;
+mod project;
 mod resources;
 mod sink;
 

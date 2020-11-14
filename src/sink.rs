@@ -5,20 +5,76 @@
 /// output as files or in memory and transparently paged?
 use std::{fs, io, path::Path, path::PathBuf};
 use rand::{rngs::ThreadRng, Rng as _};
-use tempfile::TempDir;
+
+use crate::FatalError;
 
 /// See module description.
 ///
 /// TODO: prefix for non-colliding output bunch.
 /// TODO: suffix control for store_to_file.
 pub struct Sink {
-    tempdir: TempDir,
+    tempdir: PathBuf,
     trng: ThreadRng,
 }
 
+#[derive(Clone)]
+pub struct SyncSink {
+    path: PathBuf,
+}
+
+/// A path and its unique identifier.
+pub struct UniquePath {
+    /// Fully qualified directory for the project.
+    pub path: PathBuf,
+    /// Identifier for that project.
+    pub identifier: Identifier,
+}
+
+pub type Identifier = [u8; 16];
+
 impl Sink {
+    pub fn new(path: PathBuf) -> Result<Self, FatalError> {
+        if {
+            let metadata = fs::metadata(&path);
+            !metadata.map_or(false, |md| md.is_dir())
+        } {
+            return Err(FatalError::Io(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                format!("Expected a directory but couldn't identify it as such {}", path.display())
+            )))
+        }
+
+        Ok(Sink {
+            tempdir: path,
+            trng: rand::thread_rng(),
+        })
+    }
+
+    pub fn path_of(&self, id: Identifier) -> PathBuf {
+        const SRC: &'static str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
+        assert_eq!(SRC.len(), 64);
+
+        let mut path = String::new();
+        for &b in &id {
+            let ch = SRC.chars().nth(usize::from(b & 63)).unwrap();
+            path.push(ch);
+        }
+
+        self.tempdir.join(&path)
+    }
+
+    pub fn unique_mkdir(&mut self) -> Result<UniquePath, FatalError> {
+        let (path, identifier) = self.random_path_in();
+        fs::create_dir(&path)?;
+        Ok(UniquePath {
+            path,
+            identifier,
+        })
+    }
+
+    /// FIXME: async.
     pub fn store_to_file(&mut self, from: &mut dyn io::BufRead) -> Result<PathBuf, io::Error> {
-        let path = self.random_path_in();
+        let (path, _) = self.random_path_in();
         let mut file = fs::OpenOptions::new()
             .create_new(true)
             .write(true)
@@ -28,23 +84,27 @@ impl Sink {
     }
 
     pub fn work_dir(&self) -> &Path {
-        self.tempdir.path()
+        &self.tempdir
     }
 
-    fn random_path_in(&mut self) -> PathBuf {
-        const SRC: &'static str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
-        assert_eq!(SRC.len(), 64);
-
+    fn random_path_in(&mut self) -> (PathBuf, Identifier) {
         let mut id = [0u8; 16];
         self.trng.fill(&mut id);
+        (self.path_of(id), id)
+    }
+}
 
-        let mut path = String::new();
-        for &b in &id {
-            let ch = SRC.chars().nth(usize::from(b & 63)).unwrap();
-            path.push(ch);
+impl SyncSink {
+    pub fn as_sink(&self) -> Sink {
+        Sink {
+            tempdir: self.path.clone(),
+            trng: rand::thread_rng(),
         }
+    }
+}
 
-        let base = self.tempdir.path().to_owned();
-        base.join(&path)
+impl From<Sink> for SyncSink {
+    fn from(sink: Sink) -> SyncSink {
+        SyncSink { path: sink.tempdir }
     }
 }

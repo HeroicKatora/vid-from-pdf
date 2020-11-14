@@ -5,6 +5,7 @@ use which::CanonicalPath;
 use crate::FatalError;
 use crate::explode::ExplodePdf;
 use crate::ffmpeg::Ffmpeg;
+use crate::sink::Sink;
 
 /// Command line and environment provided configuration.
 pub struct Configuration {
@@ -17,6 +18,7 @@ pub struct Configuration {
 pub struct Resources {
     pub ffmpeg: Ffmpeg,
     pub tempdir: TempDir,
+    pub dir_as_sink: Sink,
     pub explode: Box<dyn ExplodePdf>,
 }
 
@@ -51,10 +53,16 @@ impl Resources {
         }
         report.assert()?;
 
+        let ffmpeg = ffmpeg.unwrap_or_else(|_| unreachable!());
+        let tempdir = tempdir.unwrap_or_else(|_| unreachable!());
+        let sink = Sink::new(tempdir.path().to_owned())?;
+        let explode = explode.unwrap_or_else(|_| unreachable!());
+
         Ok(Resources {
-            ffmpeg: ffmpeg.unwrap_or_else(|_| unreachable!()),
-            tempdir: tempdir.unwrap_or_else(|_| unreachable!()),
-            explode: explode.unwrap_or_else(|_| unreachable!()),
+            ffmpeg,
+            tempdir,
+            dir_as_sink: sink,
+            explode,
         })
     }
 }
