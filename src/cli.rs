@@ -12,6 +12,7 @@ use tui::backend::CrosstermBackend;
 use crate::FatalError;
 use crate::app::App;
 use crate::project::Project;
+use crate::sink::FileSource;
 
 pub fn tui(app: App) -> Result<(), FatalError> {
     let stdout = io::stdout();
@@ -26,9 +27,10 @@ pub fn tui(app: App) -> Result<(), FatalError> {
 
 #[derive(Default)]
 struct Tui {
-    select: Option<FileSelect>,
+    select: Option<(FileSelect, SelectTarget)>,
     project: Option<Project>,
     status: Option<String>,
+    outfile: Option<PathBuf>,
 }
 
 struct FileSelect {
@@ -37,6 +39,11 @@ struct FileSelect {
     // TODO: redundant. Use sprint-dir or walk-dir here.
     files: Vec<PathBuf>,
     state: widgets::ListState,
+}
+
+enum SelectTarget {
+    AudioOf(usize),
+    Project,
 }
 
 async fn drive_tui(
@@ -90,7 +97,7 @@ async fn drive_tui(
                 code: KeyCode::Up,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if let Some(ref mut select) = tui.select {
+                if let Some((ref mut select, _)) = tui.select {
                     let max = select.files.len();
                     select.idx = (select.idx.min(max)).wrapping_sub(1);
                 }
@@ -99,7 +106,7 @@ async fn drive_tui(
                 code: KeyCode::Down,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if let Some(ref mut select) = tui.select {
+                if let Some((ref mut select, _)) = tui.select {
                     let max = select.files.len();
                     let next = select.idx.wrapping_add(1);
                     select.idx = if next < max { next } else { usize::MAX };
@@ -109,8 +116,16 @@ async fn drive_tui(
                 code: KeyCode::Enter,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if let Some(select) = tui.select.take() {
-                    tui.select_project(app, select)?;
+                match tui.select.take() {
+                    Some((select, SelectTarget::Project)) => {
+                        tui.select_project(app, select)?
+                    }
+                    Some((select, SelectTarget::AudioOf(idx))) => {
+                        tui.select_slide_audio(select, idx)?;
+                    }
+                    None => {
+                        tui.compute_video(app)?;
+                    }
                 }
             }
             Event::Key(KeyEvent {
@@ -118,9 +133,19 @@ async fn drive_tui(
                 modifiers: KeyModifiers::NONE,
             }) => {
                 if tui.select.is_none() {
-                    tui.select = Some(tui.start_select()?);
+                    tui.select = Some((tui.start_select()?, SelectTarget::Project));
                 }
-            },
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('s'),
+                modifiers: KeyModifiers::NONE,
+            }) => {
+                if let Some(ref outfile) = tui.outfile {
+                    fs::copy(outfile, "/tmp/output.mp4")?;
+                } else {
+                    tui.status = Some("No output file has been generated yet.".into());
+                }
+            }
             _ => {}
         }
 
@@ -142,7 +167,7 @@ impl Tui {
         let size = frame.size();
         frame.render_widget(widgets::Clear, size);
 
-        if let Some(ref mut select) = self.select {
+        if let Some((ref mut select, _)) = self.select {
             let block_rect = size.inner(&layout::Margin { horizontal: 5, vertical: 5 });
             let rect = block_rect.inner(&layout::Margin { horizontal: 1, vertical: 1 });
 
@@ -195,47 +220,16 @@ impl Tui {
         Ok(FileSelect {
             path: Path::new(".").to_owned(),
             idx: usize::MAX,
-            files: Self::read_dir(Path::new("."))?,
+            files: FileSelect::read_dir(Path::new("."))?,
             state: widgets::ListState::default(),
         })
     }
 
-    fn read_dir(path: &Path) -> Result<Vec<PathBuf>, io::Error> {
-        let mut entries = fs::read_dir(path)?
-            .map(|r| r.map(|entry| entry.path()))
-            // TODO: potentially collecting for multiple seconds..
-            .collect::<Result<Vec<PathBuf>, _>>()?;
-        entries.push(path.join(".."));
-        entries.sort();
-        Ok(entries)
-    }
-
-    fn select_project(&mut self, app: &App, mut select: FileSelect) -> Result<(), FatalError> {
-        let selected_file = match select.files.get_mut(select.idx) {
-            None => {
-                self.status = Some("no file selected".into());
-                return Ok(())
-            }
-            Some(item) => mem::take(item),
+    fn select_project(&mut self, app: &App, select: FileSelect) -> Result<(), FatalError> {
+        let selected_file = match self.resolve_file_selection(select, SelectTarget::Project) {
+            Some(file) => file,
+            None => return Ok(()),
         };
-
-        match fs::metadata(&selected_file) {
-            Err(io) => {
-                self.status = Some(format!("Failed to inspect file: {:?}", io));
-                return Ok(());
-            }
-            Ok(meta) if meta.is_dir() => {
-                select.files = Self::read_dir(Path::new(&selected_file))?;
-                select.path = selected_file;
-                self.select = Some(select);
-                return Ok(());
-            }
-            Ok(meta) if !meta.is_file() => {
-                self.status = Some("Neither a file nor a directory".into());
-                return Ok(());
-            }
-            Ok(_) => {},
-        }
 
         let mut sink = app.sink.as_sink();
         let file = match fs::File::open(selected_file) {
@@ -247,9 +241,127 @@ impl Tui {
         };
 
         let mut file = io::BufReader::new(file);
-        let project = Project::new(&mut sink, &mut file)?;
+        let mut project = Project::new(&mut sink, &mut file)?;
+        project.explode(app)?;
         self.project = Some(project);
 
         Ok(())
+    }
+
+    fn select_slide_audio(&mut self, select: FileSelect, idx: usize)
+        -> Result<(), FatalError>
+    {
+        let selected_file = match self.resolve_file_selection(select, SelectTarget::AudioOf(idx)) {
+            Some(file) => file,
+            None => return Ok(()),
+        };
+
+        let project = match self.project {
+            Some(ref mut project) => project,
+            None => {
+                self.status = Some("Selecting an audio file without project does nothing. How did you end up here?".into());
+                return Ok(())
+            }
+        };
+
+        if project.meta.slides.len() <= idx {
+            self.status = Some(format!("Slide index {} is out of range. How did you end up here?", idx));
+            return Ok(())
+        }
+
+        let mut source = match FileSource::new_from_existing(selected_file) {
+            Ok(source) => source,
+            Err(err) => {
+                self.status = Some(format!("Error opening selected audio file: {:?}", err));
+                return Ok(());
+            }
+        };
+
+        project.import_audio(idx, &mut source)?;
+        Ok(())
+    }
+
+    fn compute_video(&mut self, app: &App) -> Result<(), FatalError> {
+        let project = match self.project {
+            Some(ref mut project) => project,
+            None => {
+                self.status = Some("Generating video file without project does nothing. How did you end up here?".into());
+                return Ok(())
+            }
+        };
+
+        let assembly = project.assemble(app)?;
+        let mut outsink = &mut app.sink.as_sink();
+        assembly.finalize(&app.ffmpeg, &mut outsink)?;
+
+        let outfile = match outsink.imported().next() {
+            Some(pathbuf) => pathbuf,
+            None => {
+                self.status = Some("Error: Apparently no output was produced".into());
+                return Ok(())
+            }
+        };
+
+        self.outfile = Some(outfile);
+        Ok(())
+    }
+
+    fn resolve_file_selection(&mut self, mut select: FileSelect, kind: SelectTarget)
+        -> Option<PathBuf>
+    {
+        let selected_file = if let Some(select) = select.take_selected() {
+            select
+        } else {
+            self.status = Some("no file selected".into());
+            return None;
+        };
+
+        match fs::metadata(&selected_file) {
+            Err(io) => {
+                self.status = Some(format!("Failed to inspect file: {:?}", io));
+                return None;
+            }
+            Ok(meta) if meta.is_dir() => {
+                if let Err(err) = select.pivot(selected_file) {
+                    self.status = Some(format!(
+                        "Can't switch to directory, failed to canonicalize: {}", err
+                    ));
+                }
+                self.select = Some((select, kind));
+                return None;
+            }
+            Ok(meta) if !meta.is_file() => {
+                self.status = Some("Neither a file nor a directory".into());
+                return None;
+            }
+            Ok(_) => Some(selected_file),
+        }
+    }
+}
+
+impl FileSelect {
+   fn take_selected(&mut self) -> Option<PathBuf> {
+       match self.files.get_mut(self.idx) {
+            None => None,
+            Some(item) => Some(mem::take(item)),
+       }
+   }
+
+   fn pivot(&mut self, folder: PathBuf) -> Result<(), io::Error> {
+        self.files = Self::read_dir(Path::new(&folder))?;
+        if let Ok(canonical) = folder.canonicalize() {
+            self.path = canonical;
+        }
+        Ok(())
+   }
+
+    fn read_dir(path: &Path) -> Result<Vec<PathBuf>, io::Error> {
+        let mut entries = fs::read_dir(path)?
+            .map(|r| r.map(|entry| entry.path()))
+            // TODO: potentially collecting for multiple seconds..
+            .collect::<Result<Vec<PathBuf>, _>>()?;
+        entries.push(path.join(".."));
+        entries.sort();
+        Ok(entries)
     }
 }

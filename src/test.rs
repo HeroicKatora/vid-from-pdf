@@ -1,5 +1,5 @@
-use std::{fs, io};
-use crate::{app, project, resources};
+use std::{fs, io, path};
+use crate::{app, project, resources, sink};
 
 const PDF: &'static str = concat!(env!("CARGO_MANIFEST_DIR"), "/test-data/test.pdf");
 const WAV0: &'static str = concat!(env!("CARGO_MANIFEST_DIR"), "/test-data/espeak-0.wav");
@@ -38,11 +38,11 @@ fn assemble() {
     assert_eq!(project.meta.slides.len(), 3);
 
     for (idx, &wav) in [WAV0, WAV1, WAV2].iter().enumerate() {
-        let file = fs::File::open(wav).unwrap();
-        let mut import = io::BufReader::new(file);
-        let path = project.dir.store_to_file(&mut import)
-            .expect("Import worked");
-        project.meta.slides[idx].audio = Some(path);
+        let path = path::Path::new(wav).to_owned();
+        let mut source = sink::FileSource::new_from_existing(path)
+            .expect("Input file to exist");
+        project.import_audio(idx, &mut source)
+            .expect("Audio file has been imported");
     }
 
     let assembly = project.assemble(&app)

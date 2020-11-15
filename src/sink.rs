@@ -176,7 +176,7 @@ impl From<Sink> for SyncSink {
 
 impl FileSource {
     /// Create by opening a file assumed to exist.
-    pub fn new_from_existing(path: PathBuf) -> Result<Self, FatalError> {
+    pub fn new_from_existing(path: PathBuf) -> Result<Self, io::Error> {
         let file = fs::File::open(&path)?;
         Ok(FileSource {
             file: io::BufReader::new(file),

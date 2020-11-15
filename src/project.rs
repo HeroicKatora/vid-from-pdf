@@ -106,6 +106,13 @@ impl Project {
         }))
     }
 
+    pub fn import_audio(&mut self, idx: usize, file: &mut FileSource) -> Result<(), FatalError> {
+        use crate::sink::Source as _;
+        let path = self.dir.store_to_file(file.as_buf_read())?;
+        self.meta.slides[idx].audio = Some(path);
+        Ok(())
+    }
+
     // FIXME: not fatal errors, such as missing information.
     pub fn assemble(&mut self, app: &App) -> Result<Assembly, FatalError> {
         let mut assembly = Assembly::new(&mut self.dir)?;
