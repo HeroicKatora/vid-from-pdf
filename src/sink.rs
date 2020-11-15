@@ -32,7 +32,26 @@ pub struct UniquePath {
     pub identifier: Identifier,
 }
 
+/// A path and its unique identifier.
+pub struct UniqueFile {
+    pub file: fs::File,
+    /// Fully qualified directory for the project.
+    pub path: PathBuf,
+    /// Identifier for that project.
+    pub identifier: Identifier,
+}
+
 pub type Identifier = [u8; 16];
+
+pub trait Source {
+    fn as_buf_read(&mut self) -> &mut dyn io::BufRead;
+    fn as_path(&self) -> Option<&Path>;
+}
+
+pub struct FileSource {
+    file: io::BufReader<fs::File>,
+    path: PathBuf,
+}
 
 impl Sink {
     pub fn new(path: PathBuf) -> Result<Self, FatalError> {
@@ -66,10 +85,40 @@ impl Sink {
         self.tempdir.join(&path)
     }
 
+    pub fn unique_path(&mut self) -> Result<UniquePath, FatalError> {
+        let (path, identifier) = self.random_path_in();
+
+        if path.exists() {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "Random path was an existing file"
+            ).into());
+        }
+
+        Ok(UniquePath {
+            path,
+            identifier,
+        })
+    }
+
     pub fn unique_mkdir(&mut self) -> Result<UniquePath, FatalError> {
         let (path, identifier) = self.random_path_in();
         fs::create_dir(&path)?;
         Ok(UniquePath {
+            path,
+            identifier,
+        })
+    }
+
+    /// Create a new file.
+    /// This method will always set `options.create_new(true)`.
+    pub fn unique_file(&mut self, options: &mut fs::OpenOptions) -> Result<UniqueFile, FatalError> {
+        let (path, identifier) = self.random_path_in();
+        let file = options
+            .create_new(true)
+            .open(&path)?;
+        Ok(UniqueFile {
+            file,
             path,
             identifier,
         })
@@ -122,5 +171,31 @@ impl SyncSink {
 impl From<Sink> for SyncSink {
     fn from(sink: Sink) -> SyncSink {
         SyncSink { path: sink.tempdir }
+    }
+}
+
+impl FileSource {
+    /// Create by opening a file assumed to exist.
+    pub fn new_from_existing(path: PathBuf) -> Result<Self, FatalError> {
+        let file = fs::File::open(&path)?;
+        Ok(FileSource {
+            file: io::BufReader::new(file),
+            path,
+        })
+    }
+
+    /// Besides the trait, we're sure to have a path here.
+    pub fn as_path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Source for FileSource {
+    fn as_buf_read(&mut self) -> &mut dyn io::BufRead {
+        &mut self.file
+    }
+
+    fn as_path(&self) -> Option<&Path> {
+        Some(&self.path)
     }
 }

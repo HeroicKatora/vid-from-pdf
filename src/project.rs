@@ -2,9 +2,10 @@ use std::{io, fs, path::PathBuf};
 use index_ext::Int;
 use serde::{Serialize, Deserialize};
 
-use crate::{FatalError, explode};
+use crate::FatalError;
 use crate::app::App;
-use crate::sink::{Sink, Identifier};
+use crate::ffmpeg::Assembly;
+use crate::sink::{FileSource, Identifier, Sink};
 
 /// A video project.
 ///
@@ -38,7 +39,6 @@ pub enum Visual {
     // TODO: replacement image?
     // TODO: or continue last frame?
     // TODO: movies? It would be 'free'.
-    None,
 }
 
 impl Project {
@@ -53,6 +53,7 @@ impl Project {
         let meta = Meta {
             source: sink.store_to_file(from)?,
             slides: vec![],
+            ffcontrol: None,
         };
 
         let project = Project {
@@ -105,6 +106,22 @@ impl Project {
         }))
     }
 
+    // FIXME: not fatal errors, such as missing information.
+    pub fn assemble(&mut self, app: &App) -> Result<Assembly, FatalError> {
+        let mut assembly = Assembly::new(&mut self.dir)?;
+        for slide in &self.meta.slides {
+            let visual = match &slide.visual {
+                Visual::Slide { src, .. } => FileSource::new_from_existing(src.clone())?,
+            };
+            let audio = match &slide.audio {
+                None => return Err(FatalError::Io(io::ErrorKind::Other.into())),
+                Some(path) => FileSource::new_from_existing(path.clone())?,
+            };
+            assembly.add_linked(&app.ffmpeg, &visual, &audio, &mut self.dir)?;
+        }
+        Ok(assembly)
+    }
+
     pub fn store(&self) -> Result<(), FatalError> {
         let file = self.dir.work_dir().join(Self::PROJECT_META);
         let meta = fs::OpenOptions::new()
@@ -116,7 +133,7 @@ impl Project {
     }
 
     pub fn explode(&mut self, app: &App) -> Result<(), FatalError> {
-        let mut source = explode::FileSource::new_from_existing(self.meta.source.clone())?;
+        let mut source = FileSource::new_from_existing(self.meta.source.clone())?;
         app.explode.explode(&mut source, &mut self.dir)?;
 
         self.meta.slides.clear();

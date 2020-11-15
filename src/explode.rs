@@ -1,9 +1,9 @@
 /// Turn a pdf into multiple images of that each page.
-use std::{fmt, fs, io, path::Path, path::PathBuf, process::Command};
+use std::{fmt, io, process::Command};
 use which::CanonicalPath;
 
 use crate::FatalError;
-use crate::sink::Sink;
+use crate::sink::{Sink, Source};
 use crate::resources::{RequiredToolError, require_tool};
 
 pub trait ExplodePdf: Send + Sync + 'static {
@@ -11,16 +11,6 @@ pub trait ExplodePdf: Send + Sync + 'static {
     fn explode(&self, src: &mut dyn Source, into: &mut Sink) -> Result<(), FatalError>;
     /// Describe the pdf exploder to a `-verbose` cli user.
     fn verbose_describe(&self, into: &mut dyn io::Write) -> Result<(), FatalError>;
-}
-
-pub trait Source {
-    fn as_buf_read(&mut self) -> &mut dyn io::BufRead;
-    fn as_path(&self) -> Option<&Path>;
-}
-
-pub struct FileSource {
-    file: io::BufReader<fs::File>,
-    path: PathBuf,
 }
 
 struct PdfToPpm {
@@ -79,27 +69,6 @@ impl PdfToPpm {
         }
 
         Ok(())
-    }
-}
-
-impl FileSource {
-    /// Create by opening a file assumed to exist.
-    pub fn new_from_existing(path: PathBuf) -> Result<Self, FatalError> {
-        let file = fs::File::open(&path)?;
-        Ok(FileSource {
-            file: io::BufReader::new(file),
-            path,
-        })
-    }
-}
-
-impl Source for FileSource {
-    fn as_buf_read(&mut self) -> &mut dyn io::BufRead {
-        &mut self.file
-    }
-
-    fn as_path(&self) -> Option<&Path> {
-        Some(&self.path)
     }
 }
 

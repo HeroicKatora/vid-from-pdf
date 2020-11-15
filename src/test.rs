@@ -36,4 +36,21 @@ fn assemble() {
     project.explode(&app)
         .expect("Exploding pdf failed");
     assert_eq!(project.meta.slides.len(), 3);
+
+    for (idx, &wav) in [WAV0, WAV1, WAV2].iter().enumerate() {
+        let file = fs::File::open(wav).unwrap();
+        let mut import = io::BufReader::new(file);
+        let path = project.dir.store_to_file(&mut import)
+            .expect("Import worked");
+        project.meta.slides[idx].audio = Some(path);
+    }
+
+    let assembly = project.assemble(&app)
+        .expect("Had everything ready");
+    let mut outsink = &mut app.sink.as_sink();
+    assembly.finalize(&app.ffmpeg, &mut outsink)
+        .expect("Assembly works");
+
+    let output = outsink.imported().next()
+        .expect("One output file");
 }
