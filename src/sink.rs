@@ -101,6 +101,10 @@ impl SyncSink {
             trng: rand::thread_rng(),
         }
     }
+
+    pub fn work_dir(&self) -> &Path {
+        &self.path
+    }
 }
 
 impl From<Sink> for SyncSink {

@@ -54,10 +54,9 @@ impl Project {
     /// Open an existing directory as a project.
     pub fn load(
         app: &App,
-        in_dir: PathBuf,
         project_id: Identifier,
     ) -> Result<Option<Self>, FatalError> {
-        let sink = Sink::new(in_dir)?;
+        let sink = app.sink.as_sink();
         let unique_path = sink.path_of(project_id);
 
         if !unique_path.exists() {

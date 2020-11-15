@@ -5,6 +5,8 @@ mod ffmpeg;
 mod project;
 mod resources;
 mod sink;
+#[cfg(test)]
+mod test;
 
 use std::fmt;
 use std::io::Write as _;
