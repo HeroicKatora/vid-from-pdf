@@ -15,6 +15,8 @@ use crate::FatalError;
 pub struct Sink {
     tempdir: PathBuf,
     trng: ThreadRng,
+    /// A temporary storage for outputs of intermediate steps.
+    imported: Vec<PathBuf>,
 }
 
 #[derive(Clone)]
@@ -47,6 +49,7 @@ impl Sink {
         Ok(Sink {
             tempdir: path,
             trng: rand::thread_rng(),
+            imported: vec![],
         })
     }
 
@@ -87,6 +90,14 @@ impl Sink {
         &self.tempdir
     }
 
+    pub fn import(&mut self, path: PathBuf) {
+        self.imported.push(path)
+    }
+
+    pub fn imported(&mut self) -> impl Iterator<Item=PathBuf> + '_ {
+        self.imported.drain(..)
+    }
+
     fn random_path_in(&mut self) -> (PathBuf, Identifier) {
         let mut id = [0u8; 16];
         self.trng.fill(&mut id);
@@ -99,6 +110,7 @@ impl SyncSink {
         Sink {
             tempdir: self.path.clone(),
             trng: rand::thread_rng(),
+            imported: vec![],
         }
     }
 

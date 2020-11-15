@@ -15,10 +15,10 @@ fn assemble() {
     let app = app::App::new(resources);
 
     let pdf = io::Cursor::new(fs::read(PDF).expect("Pdf file"));
-    let project = project::Project::new(&mut app.sink.as_sink(), &mut {pdf})
+    let mut project = project::Project::new(&mut app.sink.as_sink(), &mut {pdf})
         .expect("Project created");
 
-    {
+    { // Test we can load it..
         for entry in fs::read_dir(app.sink.work_dir()).unwrap() {
             println!("{:?}", entry);
         }
@@ -32,4 +32,8 @@ fn assemble() {
             Err(err) => panic!("Unexpectedly didn't load the project {:?}", err),
         };
     }
+
+    project.explode(&app)
+        .expect("Exploding pdf failed");
+    assert_eq!(project.meta.slides.len(), 3);
 }

@@ -2,7 +2,7 @@ use std::{io, fs, path::PathBuf};
 use index_ext::Int;
 use serde::{Serialize, Deserialize};
 
-use crate::FatalError;
+use crate::{FatalError, explode};
 use crate::app::App;
 use crate::sink::{Sink, Identifier};
 
@@ -19,12 +19,26 @@ pub struct Project {
 pub struct Meta {
     pub source: PathBuf,
     pub slides: Vec<Slide>,
+    pub ffcontrol: Option<PathBuf>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Slide {
-    pub visual: PathBuf,
-    pub audio: PathBuf,
+    pub visual: Visual,
+    pub audio: Option<PathBuf>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum Visual {
+    /// A particular slide.
+    Slide {
+        src: PathBuf,
+        idx: usize,
+    },
+    // TODO: replacement image?
+    // TODO: or continue last frame?
+    // TODO: movies? It would be 'free'.
+    None,
 }
 
 impl Project {
@@ -98,6 +112,21 @@ impl Project {
             .write(true)
             .open(file)?;
         serde_json::to_writer(meta, &self.meta).map_err(io::Error::from)?;
+        Ok(())
+    }
+
+    pub fn explode(&mut self, app: &App) -> Result<(), FatalError> {
+        let mut source = explode::FileSource::new_from_existing(self.meta.source.clone())?;
+        app.explode.explode(&mut source, &mut self.dir)?;
+
+        self.meta.slides.clear();
+        for (idx, src) in self.dir.imported().enumerate() {
+            self.meta.slides.push(Slide {
+                visual: Visual::Slide { src, idx, },
+                audio: None,
+            })
+        }
+
         Ok(())
     }
 
