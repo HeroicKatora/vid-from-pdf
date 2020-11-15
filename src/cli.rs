@@ -31,6 +31,7 @@ struct Tui {
     project: Option<Project>,
     status: Option<String>,
     outfile: Option<PathBuf>,
+    slide_idx: usize,
 }
 
 struct FileSelect {
@@ -132,8 +133,15 @@ async fn drive_tui(
                 code: KeyCode::Char('n'),
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if tui.select.is_none() {
-                    tui.select = Some((tui.start_select()?, SelectTarget::Project));
+                if let Some(ref project) = tui.project {
+                    if tui.slide_idx < project.meta.slides.len() {
+                        tui.select = Some((tui.start_select()?, SelectTarget::AudioOf(tui.slide_idx)));
+                        tui.slide_idx += 1;
+                    }
+                } else {
+                    if tui.select.is_none() {
+                        tui.select = Some((tui.start_select()?, SelectTarget::Project));
+                    }
                 }
             }
             Event::Key(KeyEvent {
@@ -167,7 +175,35 @@ impl Tui {
         let size = frame.size();
         frame.render_widget(widgets::Clear, size);
 
-        if let Some((ref mut select, _)) = self.select {
+        if let Some(ref project) = self.project {
+            let block = widgets::Block::default()
+                .title(format!("Project with {} slides", project.meta.slides.len()))
+                .borders(widgets::Borders::ALL);
+            frame.render_widget(block, size);
+
+            let mut inner = size.inner(&layout::Margin { horizontal: 1, vertical: 1 });
+            for (idx, slide) in project.meta.slides.iter().enumerate() {
+                let item_rect = layout::Rect { height: 2, ..inner };
+                let par = widgets::Paragraph::new(format!(
+                        "{}Video: {}\n\
+                         {}Audio: {}",
+                         " ",
+                         match &slide.visual {
+                             crate::project::Visual::Slide { src, .. } => src.display(),
+                         },
+                         if idx == tui.slide_idx { "*" }  else { " " };
+                         match &slide.audio {
+                             None => String::from("Not yet selected"),
+                             Some(src) => src.display().to_string(),
+                         }
+                    ));
+                frame.render_widget(par, item_rect);
+                inner.y = inner.y.saturating_add(2);
+                inner.height = inner.height.saturating_sub(2);
+            }
+        }
+
+        if let Some((ref mut select, ref kind)) = self.select {
             let block_rect = size.inner(&layout::Margin { horizontal: 5, vertical: 5 });
             let rect = block_rect.inner(&layout::Margin { horizontal: 1, vertical: 1 });
 
@@ -196,7 +232,10 @@ impl Tui {
             });
 
             let block = widgets::Block::default()
-                .title(format!("Select a pdf: {}", select.path.display()))
+                .title(match *kind {
+                    SelectTarget::Project => format!("Select a pdf: {}", select.path.display()),
+                    SelectTarget::AudioOf(idx) => format!("Select audio for slide {}", idx),
+                })
                 .borders(widgets::Borders::ALL);
             frame.render_widget(block, block_rect);
             let list = widgets::List::new(list).highlight_symbol("*");
@@ -278,6 +317,7 @@ impl Tui {
         };
 
         project.import_audio(idx, &mut source)?;
+        self.status = Some(format!("Audio for slide {} was imported, moving to next slide", idx));
         Ok(())
     }
 
@@ -289,6 +329,12 @@ impl Tui {
                 return Ok(())
             }
         };
+
+        if let Some(first) = project.meta.slides.iter().position(|slide| slide.audio.is_none()) {
+            self.status = Some(format!("Slide {} does not have any audio selected, jumping to it.", first));
+            self.slide_idx = first;
+            return Ok(());
+        }
 
         let assembly = project.assemble(app)?;
         let mut outsink = &mut app.sink.as_sink();
