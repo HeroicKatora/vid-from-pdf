@@ -28,5 +28,13 @@ version = "0.13"
 default-features = false
 features = ["crossterm"]
 
+[dependencies.rust-embed]
+version = "5.6"
+features = ["compression"]
+[dependencies.tide]
+version = "0.15"
+default-features = false
+features = ["h1-server", "sessions"]
+
 [build-dependencies]
 auditable-build = "0.1"

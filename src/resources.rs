@@ -13,6 +13,7 @@ pub struct Configuration {
     pub stderr: std::io::Stderr,
     pub this: Option<OsString>,
     pub verbose: bool,
+    pub force_web: bool,
 }
 
 pub struct Resources {
@@ -79,6 +80,7 @@ impl Configuration {
             stderr: std::io::stderr(),
             this: None,
             verbose: false,
+            force_web: false,
         };
 
 
@@ -89,6 +91,7 @@ impl Configuration {
                 HowToParse::ExpectArg => match arg.to_str() {
                     Some("-v") | Some("-verbose") => cfg.verbose = true,
                     Some("-h") | Some("-help") | Some("--help") => cfg.bail_help()?,
+                    Some("--web") => cfg.force_web = true,
                     Some(other) => cfg.bail_unknown_argument(other)?,
                     None => cfg.bail_bad_argument(arg)?,
                 }

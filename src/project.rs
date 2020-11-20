@@ -5,7 +5,7 @@ use serde::{Serialize, Deserialize};
 use crate::FatalError;
 use crate::app::App;
 use crate::ffmpeg::Assembly;
-use crate::sink::{FileSource, Identifier, Sink};
+use crate::sink::{FileSource, Identifier, Sink, Source};
 
 /// A video project.
 ///
@@ -106,8 +106,7 @@ impl Project {
         }))
     }
 
-    pub fn import_audio(&mut self, idx: usize, file: &mut FileSource) -> Result<(), FatalError> {
-        use crate::sink::Source as _;
+    pub fn import_audio(&mut self, idx: usize, file: &mut impl Source) -> Result<(), FatalError> {
         let path = self.dir.store_to_file(file.as_buf_read())?;
         self.meta.slides[idx].audio = Some(path);
         Ok(())

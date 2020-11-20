@@ -191,7 +191,7 @@ impl Tui {
                          match &slide.visual {
                              crate::project::Visual::Slide { src, .. } => src.display(),
                          },
-                         if idx == tui.slide_idx { "*" }  else { " " };
+                         if idx == self.slide_idx { "*" } else { " " },
                          match &slide.audio {
                              None => String::from("Not yet selected"),
                              Some(src) => src.display().to_string(),

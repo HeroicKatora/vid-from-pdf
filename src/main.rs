@@ -7,6 +7,7 @@ mod resources;
 mod sink;
 #[cfg(test)]
 mod test;
+mod web;
 
 use std::fmt;
 use std::io::Write as _;
@@ -40,8 +41,14 @@ fn main() -> Result<(), FatalError> {
             
     }
     let app = app::App::new(resources);
-    cli::tui(app)?;
-    writeln!(cfg.stdout, "")?;
+
+    if crossterm::tty::IsTty::is_tty(&cfg.stdout) && !cfg.force_web {
+        cli::tui(app)?;
+        writeln!(cfg.stdout, "")?;
+    } else {
+        web::serve(app)?;
+    }
+
     Ok(())
 }
 

@@ -53,6 +53,10 @@ pub struct FileSource {
     path: PathBuf,
 }
 
+pub struct BufSource<'lt> {
+    from: &'lt mut dyn io::BufRead,
+}
+
 impl Sink {
     pub fn new(path: PathBuf) -> Result<Self, FatalError> {
         if {
@@ -197,5 +201,21 @@ impl Source for FileSource {
 
     fn as_path(&self) -> Option<&Path> {
         Some(&self.path)
+    }
+}
+
+impl<'lt, T: io::BufRead> From<&'lt mut T> for BufSource<'lt> {
+    fn from(buf: &'lt mut T) -> Self {
+        BufSource { from: buf }
+    }
+}
+
+impl Source for BufSource<'_> {
+    fn as_buf_read(&mut self) -> &mut dyn io::BufRead {
+        self.from
+    }
+
+    fn as_path(&self) -> Option<&Path> {
+        None
     }
 }
