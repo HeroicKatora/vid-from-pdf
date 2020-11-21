@@ -1,4 +1,4 @@
-use std::{fmt, io, sync::Arc};
+use std::{fmt, io, path, sync::Arc};
 
 use serde::Serialize;
 use tokio::runtime;
@@ -70,6 +70,7 @@ fn serialize_project(project: &Project) -> impl Serialize {
     struct Pages {
         identifier: String,
         pages: Vec<Page>,
+        output: Option<String>,
     }
 
     #[derive(Serialize)]
@@ -78,24 +79,23 @@ fn serialize_project(project: &Project) -> impl Serialize {
         audio_url: Option<String>,
     }
 
+    fn project_asset_url(path: &path::Path) -> String {
+        // TODO: review. Or turn into static invariant.
+        let name = path.file_name().unwrap();
+        let name = std::path::Path::new(name);
+        format!("/project/asset/{}", name.display())
+    }
+
     fn slide_to_page(slide: &crate::project::Slide) -> Page {
         Page {
-            img_url: match &slide.visual {
-                Visual::Slide { src, .. } => {
-                    // TODO: review. Or turn into static invariant.
-                    let name = src.file_name().unwrap();
-                    let name = std::path::Path::new(name);
-                    Some(format!("/project/asset/{}", name.display()))
+            img_url: match slide.visual {
+                Visual::Slide { ref src, .. } => {
+                    Some(project_asset_url(src))
                 }
             },
-            audio_url: match &slide.audio {
+            audio_url: match slide.audio {
                 None => None,
-                Some(src) => {
-                    // TODO: review. Or turn into static invariant.
-                    let name = src.file_name().unwrap();
-                    let name = std::path::Path::new(name);
-                    Some(format!("/project/asset/{}", name.display()))
-                }
+                Some(ref src) => Some(project_asset_url(src)),
             },
         }
     }
@@ -106,6 +106,10 @@ fn serialize_project(project: &Project) -> impl Serialize {
             .iter()
             .map(slide_to_page)
             .collect(),
+        output: match project.meta.output {
+            None => None,
+            Some(ref path) => Some(project_asset_url(path)),
+        }
     }
 }
 
@@ -187,7 +191,16 @@ async fn tide_project_asset(request: Request<Web>)
 async fn tide_render(request: Request<Web>)
     -> tide::Result<tide::Response>
 {
-    todo!()
+    let mut project = match request.project()? {
+        Some(project) => project,
+        None => return Ok(tide::Response::builder(404).build()),
+    };
+
+    eprintln!("{:?}", &project.meta);
+    project.assemble(&request.state().arc.app)?;
+    project.store()?;
+
+    tide_project_state(&project)
 }
 
 async fn tide_static(mut request: Request<Web>)

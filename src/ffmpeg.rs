@@ -83,14 +83,17 @@ impl Ffmpeg {
             .arg(file.as_path())
             .output()?;
 
-        let duration: f32 = String::from_utf8(output.stdout)
-            .unwrap()
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        let stderr = output.stderr;
+
+        let duration: f32 = stdout
             .trim()
             .parse()
-            .map_err(|err| io::Error::new(
-                io::ErrorKind::InvalidData,
-                err
-            ))?;
+            .map_err(|err| {
+                eprintln!("{}", &stdout);
+                eprintln!("{}", String::from_utf8_lossy(&stderr));
+                io::Error::new(io::ErrorKind::InvalidData, err)
+            })?;
         Ok(duration)
     }
 }

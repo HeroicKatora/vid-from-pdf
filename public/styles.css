@@ -43,9 +43,15 @@ main>.pseudo-image {
   width: 100%;
 }
 
+.output-video {
+  width: 100%;
+}
+.output-video>img {
+  width: 100%;
+}
 #projectLayout {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: minmax(66%, 2fr) minmax(33%, 1fr);
   column-gap: 1ch;
 }
 #pageListSidebar {
@@ -55,4 +61,10 @@ main>.pseudo-image {
 }
 .page-preview,.page-preview>img {
   height: 6em;
+}
+.page-audio-indicator.page-audio-yes {
+  display: block;
+}
+.page-audio-indicator.page-audio-no {
+  display: none; 
 }

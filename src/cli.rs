@@ -336,19 +336,13 @@ impl Tui {
             return Ok(());
         }
 
-        let assembly = project.assemble(app)?;
-        let mut outsink = &mut app.sink.as_sink();
-        assembly.finalize(&app.ffmpeg, &mut outsink)?;
+        if let Err(error) = project.assemble(app) {
+            self.status = Some(format!("Error: {:?}", error));
+        } else {
+            project.store()?;
+        }
 
-        let outfile = match outsink.imported().next() {
-            Some(pathbuf) => pathbuf,
-            None => {
-                self.status = Some("Error: Apparently no output was produced".into());
-                return Ok(())
-            }
-        };
-
-        self.outfile = Some(outfile);
+        self.outfile = project.meta.output.clone();
         Ok(())
     }
 

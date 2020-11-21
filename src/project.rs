@@ -115,7 +115,7 @@ impl Project {
     }
 
     // FIXME: not fatal errors, such as missing information.
-    pub fn assemble(&mut self, app: &App) -> Result<Assembly, FatalError> {
+    pub fn assemble(&mut self, app: &App) -> Result<(), FatalError> {
         let mut assembly = Assembly::new(&mut self.dir)?;
         for slide in &self.meta.slides {
             let visual = match &slide.visual {
@@ -127,7 +127,20 @@ impl Project {
             };
             assembly.add_linked(&app.ffmpeg, &visual, &audio, &mut self.dir)?;
         }
-        Ok(assembly)
+
+        let mut outsink = &mut self.dir;
+        assembly.finalize(&app.ffmpeg, &mut outsink)?;
+
+        let output = outsink
+            .imported()
+            .next()
+            .ok_or_else(|| FatalError::Io(io::Error::new(
+                io::ErrorKind::NotFound.into(),
+                "Apparently no output was produced",
+            )))?;
+
+        self.meta.output = Some(output);
+        Ok(())
     }
 
     pub fn store(&self) -> Result<(), FatalError> {

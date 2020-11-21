@@ -8,22 +8,29 @@
 	<template id="templateProject">
     <h2>Edit page audio</h2>
     <div id="projectLayout">
-      <video class="output-video">
+      <picture class="output-video">
+        <img id="outputVideoReplacement"></img>
         Complete audio selection and click Generate.
-      </video>
+      </picture>
       <div id="pageListSidebar">
         <ol id="pageList"></ol>
       </div>
+      <audio controls id="pageAudio"></audio>
+      <div id="pageAudioSetter">
+        <input class="matter-button-outlined" type="file" accept="audio/*"></input>
+        <button class="matter-button-outlined "></button>
+      </div>
+      <button class="matter-button-outlined" id="createVideo">Generate</button>
+      <button class="matter-button-outlined" id="downloadVideo" disabled>Download</button>
     </div>
-    <button class="matter-button-outlined" id="createVideo">Generate</button>
 	</template>
   <template id="templatePage">
     <li class="page-list-item">
       <!-- We might have a thumbnail source later -->
       <picture class="page-preview"><img></img></picture>
-      <audio controls></audio>
-      <input class="matter-button-outlined" type="file" accept="audio/*"></input>
-      <button class="matter-button-outlined "></button>
+      <div class="page-audio-indicator">
+        Has audio.
+      </div>
     </li>
   </template>
   <template id="templateMain">
