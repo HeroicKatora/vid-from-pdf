@@ -104,6 +104,7 @@ fn tide_app(state: Web) -> Server<Web> {
     app.at("/").get(tide_index);
     app.at("/project/new").put(tide_create);
     app.at("/project/page/:num").put(tide_set_audio);
+    app.at("/assets/*").get(tide_asset);
 
     app
 }
@@ -112,9 +113,40 @@ async fn tide_index(mut request: Request<Web>)
     -> tide::Result<tide::Response>
 {
     let _ = request.session_mut();
+    #[cfg(not(debug_assertions))]
     let content = request.state().arc.index.clone();
+    #[cfg(debug_assertions)]
+    let content = Asset::get("index.html").unwrap().into_owned();
     let response = tide::Response::builder(200)
         .content_type(mime::HTML)
+        .body(content)
+        .build();
+    Ok(response)
+}
+
+async fn tide_asset(mut request: Request<Web>)
+    -> tide::Result<tide::Response>
+{
+    let path = request.url().path();
+    let relative = path
+        .strip_prefix("/assets/")
+        .ok_or_else(|| tide::Error::new(400, Error::AssetNotFound))?;
+    let cow = Asset::get(relative)
+        .ok_or_else(|| tide::Error::new(400, Error::AssetNotFound))?;
+    let content = cow.into_owned();
+
+    let extension = std::path::Path::new(relative)
+        .extension()
+        // We have an asset without file extension. Great.
+        .ok_or_else(|| tide::Error::new(500, Error::InternalServerError))?
+        .to_str()
+        .ok_or_else(|| tide::Error::new(500, Error::InternalServerError))?;
+    // Or one that isn't valid.. Good job.
+    let mime = mime::Mime::from_extension(extension)
+        .ok_or_else(|| tide::Error::new(500, Error::InternalServerError))?;
+
+    let response = tide::Response::builder(200)
+        .content_type(mime)
         .body(content)
         .build();
     Ok(response)
@@ -200,6 +232,7 @@ fn tide_project_state(project: &Project) -> tide::Result<tide::Response> {
 
 #[derive(Debug)]
 enum Error {
+    AssetNotFound,
     InternalServerError,
     NoSuchProject,
     OnlyPdfAccepted,
@@ -208,6 +241,7 @@ enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Error::AssetNotFound => f.write_str("No such asset."),
             Error::InternalServerError => f.write_str("An internal server error occurred."),
             Error::NoSuchProject => f.write_str("This project has been deleted."),
             Error::OnlyPdfAccepted => f.write_str("Only pdf is accepted."),
