@@ -1,17 +1,51 @@
 <head>
-	<link rel="stylesheet" href="/assets/matter.min.css">
-	<link rel="stylesheet" href="/assets/styles.css">
+	<link rel="stylesheet" href="/static/matter.min.css">
+	<link rel="stylesheet" href="/static/styles.css">
+	<script src="/static/main.js"></script>
+	<template id="templateLoader">
+		Loading..
+	</template>
+	<template id="templateProject">
+    <h2>Edit page audio</h2>
+    <div id="projectLayout">
+      <video class="output-video">
+        Complete audio selection and click Generate.
+      </video>
+      <div id="pageListSidebar">
+        <ol id="pageList"></ol>
+      </div>
+    </div>
+    <button class="matter-button-outlined" id="createVideo">Generate</button>
+	</template>
+  <template id="templatePage">
+    <li class="page-list-item">
+      <!-- We might have a thumbnail source later -->
+      <picture class="page-preview"><img></img></picture>
+      <audio controls></audio>
+      <input class="matter-button-outlined" type="file" accept="audio/*"></input>
+      <button class="matter-button-outlined "></button>
+    </li>
+  </template>
+  <template id="templateMain">
+		<div class="pseudo-image"></div>
+		<h3>Easily turn your presentation pdf into a narrated video.</h3>
+		<div class="file-drop matter-button-outlined" id="fileDrop">
+			<div class="file-drop-flavor">Drag&amp;Drop a .pdf file</div>
+		</div>
+		<input class="matter-button-outlined" type="file" id="fileInput" accept=".pdf,application/pdf"></input>
+		<button class="matter-button-contained" id="createProject"> Go </button>
+  </template>
 </head>
 <body>
 	<div class="vfp-main content-font">
 	<main>
 		<div class="pseudo-image"></div>
-		Easily turn your presentation pdf into a narrated video.
+		<h3>Easily turn your presentation pdf into a narrated video.</h3>
 		<div class="file-drop matter-button-outlined" id="fileDrop">
 			<div class="file-drop-flavor">Drag&amp;Drop a .pdf file</div>
 		</div>
-		<input class="matter-button-outlined" type="file" id="fileInput"></input>
-		<button class="matter-button-contained"> Go </button>
+		<input class="matter-button-outlined" type="file" id="fileInput" accept=".pdf,application/pdf"></input>
+		<button class="matter-button-contained" id="createProject"> Go </button>
 	</main>
 	</div>
 </body>

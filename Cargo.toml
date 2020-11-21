@@ -8,6 +8,7 @@ build = "build.rs"
 
 [dependencies]
 auditable = "0.1"
+base64 = "0.13"
 index-ext = "0.0.2"
 rand = "0.7"
 serde = "1"
@@ -34,7 +35,7 @@ features = ["compression"]
 [dependencies.tide]
 version = "0.15"
 default-features = false
-features = ["h1-server", "sessions"]
+features = ["h1-server", "logger", "sessions"]
 
 [build-dependencies]
 auditable-build = "0.1"

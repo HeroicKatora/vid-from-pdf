@@ -16,20 +16,21 @@ pub struct Project {
     pub meta: Meta,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Meta {
     pub source: PathBuf,
     pub slides: Vec<Slide>,
     pub ffcontrol: Option<PathBuf>,
+    pub output: Option<PathBuf>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Slide {
     pub visual: Visual,
     pub audio: Option<PathBuf>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Visual {
     /// A particular slide.
     Slide {
@@ -54,6 +55,7 @@ impl Project {
             source: sink.store_to_file(from)?,
             slides: vec![],
             ffcontrol: None,
+            output: None,
         };
 
         let project = Project {

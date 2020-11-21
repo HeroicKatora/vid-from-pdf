@@ -11,7 +11,7 @@ use tide::sessions::{MemoryStore, SessionMiddleware};
 
 use crate::{FatalError, sink};
 use crate::app::App;
-use crate::project::Project;
+use crate::project::{Project, Visual};
 
 pub fn serve(app: App) -> Result<(), FatalError> {
     let state = Web::new(app)?;
@@ -68,6 +68,7 @@ impl Web {
 fn serialize_project(project: &Project) -> impl Serialize {
     #[derive(Serialize)]
     struct Pages {
+        identifier: String,
         pages: Vec<Page>,
     }
 
@@ -77,16 +78,34 @@ fn serialize_project(project: &Project) -> impl Serialize {
         audio_url: Option<String>,
     }
 
+    fn slide_to_page(slide: &crate::project::Slide) -> Page {
+        Page {
+            img_url: match &slide.visual {
+                Visual::Slide { src, .. } => {
+                    // TODO: review. Or turn into static invariant.
+                    let name = src.file_name().unwrap();
+                    let name = std::path::Path::new(name);
+                    Some(format!("/project/asset/{}", name.display()))
+                }
+            },
+            audio_url: match &slide.audio {
+                None => None,
+                Some(src) => {
+                    // TODO: review. Or turn into static invariant.
+                    let name = src.file_name().unwrap();
+                    let name = std::path::Path::new(name);
+                    Some(format!("/project/asset/{}", name.display()))
+                }
+            },
+        }
+    }
+
     Pages {
+        identifier: base64::encode_config(&project.project_id, base64::URL_SAFE),
         pages: project.meta.slides
             .iter()
-            .map(|slide| {
-                Page {
-                    img_url: None,
-                    audio_url: None,
-                }
-            })
-            .collect()
+            .map(slide_to_page)
+            .collect(),
     }
 }
 
@@ -102,9 +121,16 @@ fn tide_app(state: Web) -> Server<Web> {
     ));
 
     app.at("/").get(tide_index);
+    // FIXME: restore the session state to that id.
+    app.at("/project/edit/:id").get(tide_index);
+
     app.at("/project/new").put(tide_create);
+    app.at("/project/get").get(tide_introspect);
+    app.at("/project/asset/:id").get(tide_project_asset);
+    app.at("/project/render").post(tide_render);
+
     app.at("/project/page/:num").put(tide_set_audio);
-    app.at("/assets/*").get(tide_asset);
+    app.at("/static/*").get(tide_static);
 
     app
 }
@@ -124,12 +150,52 @@ async fn tide_index(mut request: Request<Web>)
     Ok(response)
 }
 
-async fn tide_asset(mut request: Request<Web>)
+async fn tide_introspect(request: Request<Web>)
+    -> tide::Result<tide::Response>
+{
+    if let Some(project) = request.project()? {
+        tide_project_state(&project)
+    } else {
+        Ok(tide::Response::builder(404).build())
+    }
+}
+
+async fn tide_project_asset(request: Request<Web>)
+    -> tide::Result<tide::Response>
+{
+    let path = {
+        let project = match request.project()? {
+            Some(project) => project,
+            None => return Ok(tide::Response::builder(404).build()),
+        };
+
+        let path = request.url().path();
+        let relative = path
+            .strip_prefix("/project/asset/")
+            .ok_or_else(|| tide::Error::new(400, Error::AssetNotFound))?;
+
+        project.dir.work_dir().join(relative)
+    };
+
+    let body = tide::Body::from_file(path).await?;
+    let response = tide::Response::builder(200)
+        .body(body)
+        .build();
+    Ok(response)
+}
+
+async fn tide_render(request: Request<Web>)
+    -> tide::Result<tide::Response>
+{
+    todo!()
+}
+
+async fn tide_static(mut request: Request<Web>)
     -> tide::Result<tide::Response>
 {
     let path = request.url().path();
     let relative = path
-        .strip_prefix("/assets/")
+        .strip_prefix("/static/")
         .ok_or_else(|| tide::Error::new(400, Error::AssetNotFound))?;
     let cow = Asset::get(relative)
         .ok_or_else(|| tide::Error::new(400, Error::AssetNotFound))?;
@@ -182,10 +248,12 @@ async fn tide_create(mut request: Request<Web>)
 
     let mut project = Project::new(&mut sink, &mut body)?;
     project.explode(&request.state().arc.app)?;
+    project.store()?;
 
     request
         .session_mut()
         .insert(Web::PROJECT_ID, &project.project_id)?;
+    eprintln!("{:?}", &project.meta);
     tide_project_state(&project)
 }
 
