@@ -56,11 +56,19 @@ pub enum FatalError {
     Io(std::io::Error),
     /// A corrupt, __internal__ data dump.
     Corrupt(serde_json::Error),
+    /// Some error in image conversion.
+    Image(image::error::ImageError),
 }
 
 impl From<std::io::Error> for FatalError {
     fn from(err: std::io::Error) -> FatalError {
         FatalError::Io(err)
+    }
+}
+
+impl From<image::error::ImageError> for FatalError {
+    fn from(err: image::error::ImageError) -> FatalError {
+        FatalError::Image(err)
     }
 }
 
@@ -71,6 +79,7 @@ impl fmt::Debug for FatalError {
         match self {
             FatalError::Io(io) => write!(f, "I/O error: {:?}", io),
             FatalError::Corrupt(err) => write!(f, "Corrupt data structure: {:?}", err),
+            FatalError::Image(err) => write!(f, "Bad image data: {:?}", err),
         }
     }
 }

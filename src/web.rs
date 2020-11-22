@@ -93,7 +93,11 @@ fn serialize_project(project: &Project) -> impl Serialize {
         Page {
             img_url: match slide.visual {
                 Visual::Slide { ref src, .. } => {
-                    Some(project_asset_url(src))
+                    Some(if let Some(ref png) = slide.png {
+                        project_asset_url(png)
+                    } else {
+                        project_asset_url(src)
+                    })
                 }
             },
             audio_url: match slide.audio {
@@ -271,6 +275,7 @@ async fn tide_create(mut request: Request<Web>)
 
     let mut project = Project::new(&mut sink, &mut body)?;
     project.explode(&request.state().arc.app)?;
+    project.thumbnail()?;
     project.store()?;
 
     request

@@ -29,6 +29,8 @@ pub struct Meta {
 pub struct Slide {
     pub visual: Visual,
     pub audio: Option<PathBuf>,
+    /// The visual, converted to PNG.
+    pub png: Option<PathBuf>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -154,6 +156,19 @@ impl Project {
         Ok(())
     }
 
+    /// Convert all visuals to png versions.
+    pub fn thumbnail(&mut self) -> Result<(), FatalError> {
+        for slide in &mut self.meta.slides {
+            match slide.visual {
+                Visual::Slide { ref src, .. } => {
+                    let path = self.meta.replacement.convert_ppm_to_png(&mut self.dir, src)?;
+                    slide.png = Some(path);
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn store(&self) -> Result<(), FatalError> {
         let file = self.dir.work_dir().join(Self::PROJECT_META);
         let meta = fs::OpenOptions::new()
@@ -173,6 +188,7 @@ impl Project {
             self.meta.slides.push(Slide {
                 visual: Visual::Slide { src, idx, },
                 audio: None,
+                png: None,
             })
         }
 
@@ -197,5 +213,17 @@ impl Replacement {
         }
 
         Ok(self.path.as_ref().unwrap())
+    }
+
+    fn convert_ppm_to_png(&self, sink: &mut Sink, path: &PathBuf) -> Result<PathBuf, FatalError> {
+        let image = {
+            let mut reader = image::io::Reader::open(path)?;
+            reader.set_format(image::ImageFormat::Pnm);
+            reader.decode()?
+        };
+
+        let unique = sink.unique_path()?;
+        image.save_with_format(&unique.path, image::ImageFormat::Png)?;
+        Ok(unique.path)
     }
 }

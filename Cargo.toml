@@ -36,6 +36,14 @@ features = ["compression"]
 version = "0.15"
 default-features = false
 features = ["h1-server", "logger", "sessions"]
+[dependencies.image]
+version = "0.23.12"
+default-features = false
+features = ["png", "pnm"]
 
 [build-dependencies]
 auditable-build = "0.1"
+
+[profile.dev.package."*"]
+opt-level = 3
+debug = false

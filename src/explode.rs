@@ -53,7 +53,7 @@ impl PdfToPpm {
 
         Command::new(&self.exe)
             .current_dir(sink.work_dir())
-            .args(&["-png", "-forcenum", "-rx", "600", "-ry", "600"])
+            .args(&["-forcenum", "-rx", "600", "-ry", "600"])
             .arg(path)
             .arg("pages")
             .status()
@@ -67,7 +67,7 @@ impl PdfToPpm {
                 Some(name) => name,
             };
 
-            let file = match name.strip_suffix(".png") {
+            let file = match name.strip_suffix(".ppm") {
                 Some(file) => file,
                 None => continue,
             };
