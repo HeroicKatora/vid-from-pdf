@@ -1,3 +1,31 @@
+const I18nTable = JSON.parse(`
+{
+  "en": {
+    "loading": "Loading..",
+    "edit-header": "Edit page audio",
+    "edit-instructions": "Complete audio selection and click Generate.",
+    "edit-generate": "Generate",
+    "edit-download": "Download",
+    "edit-has-audio": "Has audio",
+    "main-description": "Easily turn your presentation pdf into a narrated video.",
+    "main-drag-drop": "Drag&Drop a .pdf file",
+    "main-go": " Go "
+  },
+  "de": {
+    "loading": "Lade..",
+    "edit-header": "Editiere Audio der Folien",
+    "edit-instructions": "Wähle Folien und deren Audio, und klicke Erzeugen.",
+    "edit-generate": "Erzeugen",
+    "edit-download": "Download",
+    "edit-has-audio": "Hat Audio",
+    "main-description": "Mach ein Video aus einer pdf Präsentation."
+    "main-drag-drop": "Eine .pdf Datei hierher ziehen",
+    "main-go": " Start "
+  }
+}
+`);
+
+
 const Global = {
   init() {
     this.mainEl = document.getElementsByTagName('main')[0]; 
@@ -5,7 +33,21 @@ const Global = {
     this.templateLoader = document.getElementById('templateLoader');
     this.templateProject = document.getElementById('templateProject');
     this.templatePage = document.getElementById('templatePage');
+    this.translateMain();
+
     return this;
+  },
+  translateMain() {
+    const userLang = navigator.language || navigator.userLanguage; 
+    const i18n = I18nTable[userLang] ? I18nTable[userLang] : I18nTable[''];
+
+    document.querySelectorAll('main [data-translation-id]').forEach((el) => {
+      console.log(el);
+      const trId = el.getAttribute('data-translation-id');
+      if (i18n[trId]) {
+        el.innerText = i18n[trId];
+      }
+    });
   },
   assignFromTemplate: function(template) {
     const newContent = template.content.cloneNode(true);
@@ -13,6 +55,7 @@ const Global = {
     while(newContent.firstChild) {
       this.mainEl.appendChild(newContent.removeChild(newContent.firstChild));
     }
+    this.translateMain();
   },
   loadFromRequest: async function(request) {
     try {

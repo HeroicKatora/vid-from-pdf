@@ -1,16 +1,16 @@
 <head>
-	<link rel="stylesheet" href="/static/matter.min.css">
-	<link rel="stylesheet" href="/static/styles.css">
-	<script src="/static/main.js"></script>
-	<template id="templateLoader">
-		Loading..
-	</template>
-	<template id="templateProject">
-    <h2>Edit page audio</h2>
+  <link rel="stylesheet" href="/static/matter.min.css">
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/main.js"></script>
+  <template id="templateLoader" data-translation-id="loading">
+    Loading..
+  </template>
+  <template id="templateProject">
+    <h2 data-translation-id="edit-header">Edit page audio</h2>
     <div id="projectLayout">
       <picture class="output-video">
         <img id="outputVideoReplacement"></img>
-        Complete audio selection and click Generate.
+        <span data-translation-id="edit-instructions">Complete audio selection and click Generate.</span>
       </picture>
       <div id="pageListSidebar">
         <ol id="pageList"></ol>
@@ -20,39 +20,39 @@
         <input class="matter-button-outlined" type="file" accept="audio/*"></input>
         <button class="matter-button-outlined "></button>
       </div>
-      <button class="matter-button-outlined" id="createVideo">Generate</button>
-      <button class="matter-button-outlined" id="downloadVideo" disabled>Download</button>
+      <button class="matter-button-outlined" id="createVideo" data-translation-id='edit-generate'>Generate</button>
+      <button class="matter-button-outlined" id="downloadVideo" disabled data-translation-id='edit-download'>Download</button>
     </div>
-	</template>
+  </template>
   <template id="templatePage">
     <li class="page-list-item">
       <!-- We might have a thumbnail source later -->
       <picture class="page-preview"><img></img></picture>
-      <div class="page-audio-indicator">
+      <div class="page-audio-indicator" data-translation-id='edit-has-audio'>
         Has audio.
       </div>
     </li>
   </template>
   <template id="templateMain">
-		<div class="pseudo-image"></div>
-		<h3>Easily turn your presentation pdf into a narrated video.</h3>
-		<div class="file-drop matter-button-outlined" id="fileDrop">
-			<div class="file-drop-flavor">Drag&amp;Drop a .pdf file</div>
-		</div>
-		<input class="matter-button-outlined" type="file" id="fileInput" accept=".pdf,application/pdf"></input>
-		<button class="matter-button-contained" id="createProject"> Go </button>
+    <div class="pseudo-image"></div>
+    <h3 data-translation-id='main-description'>Easily turn your presentation pdf into a narrated video.</h3>
+    <div class="file-drop matter-button-outlined" id="fileDrop">
+      <div class="file-drop-flavor" data-translation-id='main-drag-drop'>Drag&amp;Drop a .pdf file</div>
+    </div>
+    <input class="matter-button-outlined" type="file" id="fileInput" accept=".pdf,application/pdf"></input>
+    <button class="matter-button-contained" id="createProject" data-translation-id='main-go'> Go </button>
   </template>
 </head>
 <body>
-	<div class="vfp-main content-font">
-	<main>
-		<div class="pseudo-image"></div>
-		<h3>Easily turn your presentation pdf into a narrated video.</h3>
-		<div class="file-drop matter-button-outlined" id="fileDrop">
-			<div class="file-drop-flavor">Drag&amp;Drop a .pdf file</div>
-		</div>
-		<input class="matter-button-outlined" type="file" id="fileInput" accept=".pdf,application/pdf"></input>
-		<button class="matter-button-contained" id="createProject"> Go </button>
-	</main>
-	</div>
+  <div class="vfp-main content-font">
+    <main>
+      <div class="pseudo-image"></div>
+      <h3 data-translation-id='main-description'>Easily turn your presentation pdf into a narrated video.</h3>
+      <div class="file-drop matter-button-outlined" id="fileDrop">
+        <div class="file-drop-flavor" data-translation-id='main-drag-drop'>Drag&amp;Drop a .pdf file</div>
+      </div>
+      <input class="matter-button-outlined" type="file" id="fileInput" accept=".pdf,application/pdf"></input>
+      <button class="matter-button-contained" id="createProject" data-translation-id='main-go'> Go </button>
+    </main>
+  </div>
 </body>
