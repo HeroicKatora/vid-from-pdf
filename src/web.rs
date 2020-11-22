@@ -18,7 +18,10 @@ pub fn serve(app: App) -> Result<(), FatalError> {
     let app = tide_app(state);
 
     let rt = runtime::Builder::new_current_thread().build()?;
-    rt.block_on(app.listen("localhost:8051"))?;
+
+    let addr = "localhost:8051";
+    eprintln!("Serving web server on `{}`", addr);
+    rt.block_on(app.listen(addr))?;
 
     Ok(())
 }
@@ -200,7 +203,6 @@ async fn tide_render(request: Request<Web>)
         None => return Ok(tide::Response::builder(404).build()),
     };
 
-    eprintln!("{:?}", &project.meta);
     project.assemble(&request.state().arc.app)?;
     project.store()?;
 
@@ -270,7 +272,6 @@ async fn tide_create(mut request: Request<Web>)
     request
         .session_mut()
         .insert(Web::PROJECT_ID, &project.project_id)?;
-    eprintln!("{:?}", &project.meta);
     tide_project_state(&project)
 }
 
