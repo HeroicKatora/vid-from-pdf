@@ -27,6 +27,8 @@ const I18nTable = JSON.parse(`
 }
 `);
 
+I18nTable['de-DE'] = I18nTable['de'];
+I18nTable['en-US'] = I18nTable['en'];
 
 const Global = {
   init() {
@@ -41,7 +43,7 @@ const Global = {
   },
   translateMain() {
     const userLang = navigator.language || navigator.userLanguage; 
-    const i18n = I18nTable[userLang] ? I18nTable[userLang] : I18nTable[''];
+    const i18n = I18nTable[userLang] ? I18nTable[userLang] : I18nTable['en'];
 
     document.querySelectorAll('main [data-translation-id]').forEach((el) => {
       console.log(el);

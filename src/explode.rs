@@ -1,5 +1,5 @@
 /// Turn a pdf into multiple images of that each page.
-use std::{fmt, io, process::Command};
+use std::{collections::BTreeMap, fmt, fs, io, process::Command};
 use which::CanonicalPath;
 
 use crate::FatalError;
@@ -53,19 +53,40 @@ impl PdfToPpm {
 
         Command::new(&self.exe)
             .current_dir(sink.work_dir())
-            .args(&["-png", "-rx", "600", "-ry", "600"])
+            .args(&["-png", "-forcenum", "-rx", "600", "-ry", "600"])
             .arg(path)
             .arg("pages")
             .status()
             .expect("Converting pdf with `pdftoppm` failed");
 
-        for idx in 0.. {
-            let frame = format!("pages-{}.png", idx + 1);
-            let frame = sink.work_dir().join(&frame);
-            if !frame.exists() {
-                break;
-            }
-            sink.import(frame);
+        let mut entries = BTreeMap::new();
+        for entry in fs::read_dir(sink.work_dir())? {
+            let name = entry?.file_name();
+            let name = match name.to_str() {
+                None => continue,
+                Some(name) => name,
+            };
+
+            let file = match name.strip_suffix(".png") {
+                Some(file) => file,
+                None => continue,
+            };
+
+            let num = match file.strip_prefix("pages-") {
+                Some(num) => num,
+                None => continue,
+            };
+
+            let num = match num.parse::<u32>() {
+                Err(_) => continue,
+                Ok(num) => num,
+            };
+
+            entries.insert(num, sink.work_dir().join(name));
+        }
+
+        for (_, page) in entries.range(..) {
+            sink.import(page.clone());
         }
 
         Ok(())

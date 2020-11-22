@@ -55,7 +55,7 @@ main>.pseudo-image {
   column-gap: 1ch;
 }
 #pageListSidebar {
-  max-height: 90vh;
+  max-height: 60vh;
   width: 100%;
   overflow-y: auto;
 }
