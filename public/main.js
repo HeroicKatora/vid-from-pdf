@@ -46,7 +46,6 @@ const Global = {
     const i18n = I18nTable[userLang] ? I18nTable[userLang] : I18nTable['en'];
 
     document.querySelectorAll('main [data-translation-id]').forEach((el) => {
-      console.log(el);
       const trId = el.getAttribute('data-translation-id');
       if (i18n[trId]) {
         el.innerText = i18n[trId];
@@ -163,7 +162,6 @@ const Global = {
 
       download.removeAttribute('disabled');
       download.onclick = () => {
-        console.log(link);
         link.click();
       };
     }
@@ -204,6 +202,8 @@ const Global = {
         body: fileInput.files[0]
       });
 
+      that.assignFromTemplate(that.templateLoader);
+      that.translateMain();
       await that.loadFromRequest(req);
     };
   }

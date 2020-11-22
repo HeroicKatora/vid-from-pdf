@@ -45,12 +45,10 @@ fn assemble() {
             .expect("Audio file has been imported");
     }
 
-    let assembly = project.assemble(&app)
+    project.assemble(&app)
         .expect("Had everything ready");
-    let mut outsink = &mut app.sink.as_sink();
-    assembly.finalize(&app.ffmpeg, &mut outsink)
-        .expect("Assembly works");
 
-    let output = outsink.imported().next()
+    let output = project.meta.output
         .expect("One output file");
+    assert!(output.exists());
 }
