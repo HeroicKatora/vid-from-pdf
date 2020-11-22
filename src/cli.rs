@@ -330,12 +330,6 @@ impl Tui {
             }
         };
 
-        if let Some(first) = project.meta.slides.iter().position(|slide| slide.audio.is_none()) {
-            self.status = Some(format!("Slide {} does not have any audio selected, jumping to it.", first));
-            self.slide_idx = first;
-            return Ok(());
-        }
-
         if let Err(error) = project.assemble(app) {
             self.status = Some(format!("Error: {:?}", error));
         } else {

@@ -146,7 +146,11 @@ async fn tide_index(mut request: Request<Web>)
     #[cfg(not(debug_assertions))]
     let content = request.state().arc.index.clone();
     #[cfg(debug_assertions)]
-    let content = Asset::get("index.html").unwrap().into_owned();
+    let content = {
+        // Mark as used..
+        let _ = request.state().arc.index;
+        Asset::get("index.html").unwrap().into_owned() 
+    };
     let response = tide::Response::builder(200)
         .content_type(mime::HTML)
         .body(content)
@@ -203,7 +207,7 @@ async fn tide_render(request: Request<Web>)
     tide_project_state(&project)
 }
 
-async fn tide_static(mut request: Request<Web>)
+async fn tide_static(request: Request<Web>)
     -> tide::Result<tide::Response>
 {
     let path = request.url().path();

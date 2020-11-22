@@ -22,12 +22,18 @@ pub struct Meta {
     pub slides: Vec<Slide>,
     pub ffcontrol: Option<PathBuf>,
     pub output: Option<PathBuf>,
+    pub replacement: Replacement,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Slide {
     pub visual: Visual,
     pub audio: Option<PathBuf>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct Replacement {
+    pub path: Option<PathBuf>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -56,6 +62,7 @@ impl Project {
             slides: vec![],
             ffcontrol: None,
             output: None,
+            replacement: Replacement::default(),
         };
 
         let project = Project {
@@ -117,12 +124,16 @@ impl Project {
     // FIXME: not fatal errors, such as missing information.
     pub fn assemble(&mut self, app: &App) -> Result<(), FatalError> {
         let mut assembly = Assembly::new(&mut self.dir)?;
+
         for slide in &self.meta.slides {
             let visual = match &slide.visual {
                 Visual::Slide { src, .. } => FileSource::new_from_existing(src.clone())?,
             };
             let audio = match &slide.audio {
-                None => return Err(FatalError::Io(io::ErrorKind::Other.into())),
+                None => {
+                    let path = self.meta.replacement.silent_audio(&mut self.dir, app)?;
+                    FileSource::new_from_existing(path.clone())?
+                },
                 Some(path) => FileSource::new_from_existing(path.clone())?,
             };
             assembly.add_linked(&app.ffmpeg, &visual, &audio, &mut self.dir)?;
@@ -169,4 +180,22 @@ impl Project {
     }
 
     const PROJECT_META: &'static str = ".project";
+}
+
+impl Replacement {
+    fn silent_audio(&mut self, sink: &mut Sink, app: &App) -> Result<&PathBuf, FatalError> {
+        if self.path.is_none() {
+            app.ffmpeg.replacement_audio(10.0f32, sink)?;
+            let file = sink
+                .imported()
+                .next()
+                .ok_or_else(|| io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "ffmpeg failed to produce replacement audio",
+                ))?;
+            self.path = Some(file);
+        }
+
+        Ok(self.path.as_ref().unwrap())
+    }
 }

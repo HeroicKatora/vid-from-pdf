@@ -7,6 +7,7 @@ const I18nTable = JSON.parse(`
     "edit-generate": "Generate",
     "edit-download": "Download",
     "edit-has-audio": "Has audio",
+    "edit-assign-audio": "Assign audio",
     "main-description": "Easily turn your presentation pdf into a narrated video.",
     "main-drag-drop": "Drag&Drop a .pdf file",
     "main-go": " Go "
@@ -18,7 +19,8 @@ const I18nTable = JSON.parse(`
     "edit-generate": "Erzeugen",
     "edit-download": "Download",
     "edit-has-audio": "Hat Audio",
-    "main-description": "Mach ein Video aus einer pdf Präsentation."
+    "edit-assign-audio": "Audio zuweisen",
+    "main-description": "Mach ein Video aus einer pdf Präsentation.",
     "main-drag-drop": "Eine .pdf Datei hierher ziehen",
     "main-go": " Start "
   }
@@ -76,6 +78,7 @@ const Global = {
 
     this.assignFromTemplate(this.templateProject);
     this.setUpProjectPage();
+    this.translateMain();
   },
   setUpProjectPage: function() {
     const pageList = this.mainEl.querySelector('#pageList');

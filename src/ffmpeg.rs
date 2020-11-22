@@ -96,6 +96,33 @@ impl Ffmpeg {
             })?;
         Ok(duration)
     }
+
+    pub fn replacement_audio(&self, duration: f32, sink: &mut Sink) -> Result<(), FatalError> {
+        let duration = duration.to_string();
+        let unique = sink.unique_path()?;
+
+        let success = Command::new(self.ffmpeg.as_path())
+            .current_dir(sink.work_dir())
+            .args(&["-f", "lavfi", "-i", "anullsrc=r=11025:cl=mono", "-t"])
+            .arg(duration)
+            .args(&["-f", "wav"])
+            .arg(&unique.path)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .status()
+            .map(|status| status.success())?;
+        
+        if !success {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "ffmpeg was unable to produce silent audio"
+            ).into());
+        }
+
+        sink.import(unique.path);
+        Ok(())
+    }
 }
 
 impl Assembly {
