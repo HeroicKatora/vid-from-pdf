@@ -253,8 +253,12 @@ async fn tide_create(mut request: Request<Web>)
     match request.project()? {
         None => {},
         Some(project) => {
-            // TODO: delete.
+            let sink = request.state().arc.app.sink.as_sink();
             request.session_mut().remove(Web::PROJECT_ID);
+
+            let path = sink.path_of(project.project_id);
+            drop(project);
+            let _ = std::fs::remove_dir_all(path);
         }
     }
 
