@@ -69,7 +69,7 @@ async fn drive_tui(
     let _canary = DisableRawMode::new();
     let mut events = EventStream::new();
     let mut tui = Tui::default();
-    tui.status = Some("Press `n` to create a new project.".into());
+    tui.status = Some("Press `enter` to select pdf for a new project.".into());
 
     term.clear()?;
     term.draw(|frame| tui.draw(frame))?;
@@ -101,6 +101,12 @@ async fn drive_tui(
                 if let Some((ref mut select, _)) = tui.select {
                     let max = select.files.len();
                     select.idx = (select.idx.min(max)).wrapping_sub(1);
+                } else if let Some(ref project) = tui.project {
+                    if tui.slide_idx > 0 {
+                        tui.slide_idx -= 1;
+                    } else {
+                        tui.slide_idx = project.meta.slides.len() - 1;
+                    }
                 }
             }
             Event::Key(KeyEvent {
@@ -111,6 +117,12 @@ async fn drive_tui(
                     let max = select.files.len();
                     let next = select.idx.wrapping_add(1);
                     select.idx = if next < max { next } else { usize::MAX };
+                } else if let Some(ref project) = tui.project {
+                    if tui.slide_idx + 1 < project.meta.slides.len() {
+                        tui.slide_idx += 1;
+                    } else {
+                        tui.slide_idx = 0;
+                    }
                 }
             }
             Event::Key(KeyEvent {
@@ -125,22 +137,16 @@ async fn drive_tui(
                         tui.select_slide_audio(select, idx)?;
                     }
                     None => {
-                        tui.compute_video(app)?;
-                    }
-                }
-            }
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('n'),
-                modifiers: KeyModifiers::NONE,
-            }) => {
-                if let Some(ref project) = tui.project {
-                    if tui.slide_idx < project.meta.slides.len() {
-                        tui.select = Some((tui.start_select()?, SelectTarget::AudioOf(tui.slide_idx)));
-                        tui.slide_idx += 1;
-                    }
-                } else {
-                    if tui.select.is_none() {
-                        tui.select = Some((tui.start_select()?, SelectTarget::Project));
+                        if let Some(ref project) = tui.project {
+                            if tui.slide_idx < project.meta.slides.len() {
+                                tui.select = Some((tui.start_select()?, SelectTarget::AudioOf(tui.slide_idx)));
+                                tui.slide_idx += 1;
+                            }
+                        } else {
+                            if tui.select.is_none() {
+                                tui.select = Some((tui.start_select()?, SelectTarget::Project));
+                            }
+                        }
                     }
                 }
             }
@@ -151,7 +157,7 @@ async fn drive_tui(
                 if let Some(ref outfile) = tui.outfile {
                     fs::copy(outfile, "/tmp/output.mp4")?;
                 } else {
-                    tui.status = Some("No output file has been generated yet.".into());
+                    tui.compute_video(&mut term, app)?;
                 }
             }
             _ => {}
@@ -283,6 +289,7 @@ impl Tui {
         let mut project = Project::new(&mut sink, &mut file)?;
         project.explode(app)?;
         self.project = Some(project);
+        self.status = Some("Press `enter` to select next audio, `s` to generate output".into());
 
         Ok(())
     }
@@ -317,11 +324,19 @@ impl Tui {
         };
 
         project.import_audio(idx, &mut source)?;
-        self.status = Some(format!("Audio for slide {} was imported, moving to next slide", idx));
+        self.status = Some("Press `enter` to select next audio, `s` to generate output".into());
+
         Ok(())
     }
 
-    fn compute_video(&mut self, app: &App) -> Result<(), FatalError> {
+    fn compute_video(
+        &mut self,
+        term: &mut Terminal<impl tui::backend::Backend>,
+        app: &App,
+    ) -> Result<(), FatalError> {
+        self.status = Some("Generating video output, this may take a while.".into());
+        term.draw(|frame| self.draw(frame))?;
+
         let project = match self.project {
             Some(ref mut project) => project,
             None => {
@@ -337,6 +352,10 @@ impl Tui {
         }
 
         self.outfile = project.meta.output.clone();
+        if let Some(ref path) = self.outfile {
+            self.status = Some(format!("Video generated in `{}`", path.display()));
+        }
+
         Ok(())
     }
 
