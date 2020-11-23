@@ -179,7 +179,7 @@ impl Assembly {
             ).into());
         }
 
-        {
+        /* {
             let file = fs::OpenOptions::new()
                 .write(true)
                 .create(true)
@@ -216,7 +216,7 @@ impl Assembly {
                 png.set_frame_delay(1, 1000)?;
                 png.write_image_data(&data)?;
             }
-        }
+        } */
 
         let mut video_out = sink.unique_path()?;
         video_out.path.set_extension("mp4");
@@ -227,9 +227,9 @@ impl Assembly {
             // scripting as tempfile does begin all its tempdirs with a literal dot.
             .arg("-i")
             .arg(&audio_out.path)
-            .args(&["-f", "apng", "-i"])
+            .args(&["-f", "concat", "-safe", "0", "-i"])
             .arg(&self.video_path)
-            .args(&["-c:v", "libx264", "-preset", "faster", "-c:a", "aac", "-vf", "scale=w=1920:h=1080:force_original_aspect_ratio=decrease:flags=lanczos"])
+            .args(&["-c:v", "libx264", "-framerate", "2", "-preset", "fast", "-c:a", "aac", "-vf", "scale=w=1920:h=1080:force_original_aspect_ratio=decrease:flags=lanczos"])
             .arg(&video_out.path)
             .output()?;
 

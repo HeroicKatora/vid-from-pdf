@@ -29,7 +29,7 @@ impl ExplodePdf for PdfToPpm {
             let image = image::io::Reader::open(&path)?
                 .with_guessed_format()?
                 .decode()?;
-            let image = image.resize_to_fill(1920, 1080,
+            let image = image.resize(1920, 1080,
                 image::imageops::FilterType::Lanczos3);
             path.set_extension("ppm");
             image.save(&path)?;
