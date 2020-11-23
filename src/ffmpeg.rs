@@ -21,6 +21,7 @@ pub struct Assembly {
     video_path: PathBuf,
     audio_list: fs::File,
     audio_path: PathBuf,
+    slide_list: Vec<(PathBuf, f32)>,
 }
 
 pub struct Version {
@@ -134,6 +135,7 @@ impl Assembly {
             audio_path: audio_ctrl.path,
             video_list: video_ctrl.file,
             video_path: video_ctrl.path,
+            slide_list: vec![],
         })
     }
 
@@ -148,6 +150,7 @@ impl Assembly {
     {
         use std::io::Write as _;
         let duration = ffmpeg.audio_duration(audio, sink)?;
+        self.slide_list.push((visual.as_path().to_owned(), duration));
         writeln!(&self.video_list, "file '{}'", visual.as_path().display()).unwrap();
         writeln!(&self.video_list, "duration {}", duration).unwrap();
         writeln!(&self.audio_list, "file {}", audio.as_path().display())?;
@@ -176,6 +179,45 @@ impl Assembly {
             ).into());
         }
 
+        {
+            let file = fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .open(&self.video_path)?;
+            // TODO: enforce this is at least one image earlier?
+            let (thumbnail, _) = self.slide_list.first().unwrap();
+            let (width, height) = {
+                image::io::Reader::open(thumbnail)?
+                    .with_guessed_format()?
+                    .into_dimensions()?
+            };
+
+            let mut png = png::Encoder::new(file, width, height);
+            png.set_color(png::ColorType::RGBA);
+            // TODO: validate length..
+            png.set_animation_info(self.slide_list.len() as u32 + 1, 1)?;
+            let mut png = png.write_header()?;
+            for (path, duration) in &self.slide_list {
+                let data = image::io::Reader::open(path)?
+                    .with_guessed_format()?
+                    .decode()?
+                    .into_rgba8()
+                    .into_raw();
+                png.set_frame_delay((duration*1000.0) as u16, 1000)?;
+                png.write_image_data(&data)?;
+            }
+            if let Some((path, _)) = self.slide_list.last() {
+                let data = image::io::Reader::open(path)?
+                    .with_guessed_format()?
+                    .decode()?
+                    .into_rgba8()
+                    .into_raw();
+                // Just a blip, to make sure it's not forgotten.
+                png.set_frame_delay(1, 1000)?;
+                png.write_image_data(&data)?;
+            }
+        }
+
         let mut video_out = sink.unique_path()?;
         video_out.path.set_extension("mp4");
         // Join audio to concatenated video.
@@ -185,10 +227,9 @@ impl Assembly {
             // scripting as tempfile does begin all its tempdirs with a literal dot.
             .arg("-i")
             .arg(&audio_out.path)
-            .args(&["-f", "concat", "-safe", "0", "-i"])
+            .args(&["-f", "apng", "-i"])
             .arg(&self.video_path)
-            .args(&["-filter_complex", r#"[1:v][0:a]concat=n=1:v=1:a=1[sizev][outa];[sizev]scale=ceil(iw/2)*2:ceil(ih/2)*2[outv]"#])
-            .args(&["-map", "[outv]", "-map", "[outa]", "-pix_fmt", "yuv420p"])
+            .args(&["-c:v", "libx264", "-preset", "faster", "-c:a", "aac", "-vf", "scale=w=1920:h=1080:force_original_aspect_ratio=decrease:flags=lanczos"])
             .arg(&video_out.path)
             .output()?;
 

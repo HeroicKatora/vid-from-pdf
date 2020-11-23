@@ -104,7 +104,7 @@ impl Configuration {
     }
 
     fn new_tempdir(&self) -> Result<TempDir, std::io::Error> {
-        TempDir::new()
+        TempDir::new_in(".")
     }
 
     // TODO: want to use `Result<!, FatalError>` here.
