@@ -21,6 +21,7 @@ fn main() -> Result<(), FatalError> {
         writeln!(cfg.stderr, "Using ffmpeg")?;
         writeln!(cfg.stderr, " ffmpeg: {}", resources.ffmpeg.ffmpeg.as_path().display())?;
         writeln!(cfg.stderr, " ffprobe: {}", resources.ffmpeg.ffprobe.as_path().display())?;
+        writeln!(cfg.stderr, " hw acceleration: {}", resources.ffmpeg.hw_accel.as_encoder_str())?;
         writeln!(cfg.stderr, " version: {}", resources.ffmpeg.version.version)?;
         writeln!(cfg.stderr, "Using temporary directory")?;
         writeln!(cfg.stderr, " path: {}", resources.tempdir.path().display())?;

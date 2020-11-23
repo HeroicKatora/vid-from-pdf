@@ -14,6 +14,15 @@ pub struct Ffmpeg {
     /// Also extension if we ever care about loading the configuration, inspecting details of
     /// libavutils and plugins, etc.
     pub version: Version,
+    /// The hardware acceleration to use.
+    pub hw_accel: HwAccelFlavor,
+}
+
+#[derive(Clone, Copy)]
+pub enum HwAccelFlavor {
+    None,
+    NvEnc,
+    VdPau,
 }
 
 pub struct Assembly {
@@ -34,10 +43,17 @@ pub enum LoadFfmpegError {
     VersionNumberIsUnrecognized(String),
 }
 
+#[link(name="avcodec", kind="dylib")]
+extern "C" {
+    fn avcodec_find_encoder_by_name(name: *const std::os::raw::c_char) -> *const std::os::raw::c_void;
+}
+
 impl Ffmpeg {
     pub fn new() -> Result<Ffmpeg, LoadFfmpegError> {
         let ffprobe = require_tool("ffprobe")?;
         let ffmpeg = require_tool("ffmpeg")?;
+
+        let hw_accel = Self::detect_hardware_accel();
 
         // TODO: minimum version requirements?
         let version = Command::new(&ffmpeg)
@@ -70,7 +86,23 @@ impl Ffmpeg {
             ffmpeg,
             ffprobe,
             version,
+            hw_accel,
         })
+    }
+
+    fn detect_hardware_accel() -> HwAccelFlavor {
+        const NVENC_NAME: &'static str = "h264_nvenc\0";
+        const VDPAU_NAME: &'static str = "h264_vdpau\0";
+
+        if !unsafe { avcodec_find_encoder_by_name(NVENC_NAME.as_ptr() as *const _) }.is_null() {
+            return HwAccelFlavor::NvEnc;
+        }
+
+        if !unsafe { avcodec_find_encoder_by_name(VDPAU_NAME.as_ptr() as *const _) }.is_null() {
+            return HwAccelFlavor::VdPau;
+        }
+
+        return HwAccelFlavor::None;
     }
 
     /// Determine the duration of an audio file with ffmpeg tools.
@@ -179,47 +211,12 @@ impl Assembly {
             ).into());
         }
 
-        /* {
-            let file = fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .open(&self.video_path)?;
-            // TODO: enforce this is at least one image earlier?
-            let (thumbnail, _) = self.slide_list.first().unwrap();
-            let (width, height) = {
-                image::io::Reader::open(thumbnail)?
-                    .with_guessed_format()?
-                    .into_dimensions()?
-            };
-
-            let mut png = png::Encoder::new(file, width, height);
-            png.set_color(png::ColorType::RGBA);
-            // TODO: validate length..
-            png.set_animation_info(self.slide_list.len() as u32 + 1, 1)?;
-            let mut png = png.write_header()?;
-            for (path, duration) in &self.slide_list {
-                let data = image::io::Reader::open(path)?
-                    .with_guessed_format()?
-                    .decode()?
-                    .into_rgba8()
-                    .into_raw();
-                png.set_frame_delay((duration*1000.0) as u16, 1000)?;
-                png.write_image_data(&data)?;
-            }
-            if let Some((path, _)) = self.slide_list.last() {
-                let data = image::io::Reader::open(path)?
-                    .with_guessed_format()?
-                    .decode()?
-                    .into_rgba8()
-                    .into_raw();
-                // Just a blip, to make sure it's not forgotten.
-                png.set_frame_delay(1, 1000)?;
-                png.write_image_data(&data)?;
-            }
-        } */
+        let meta = self.create_meta_data(sink)?;
 
         let mut video_out = sink.unique_path()?;
         video_out.path.set_extension("mp4");
+        let hw_encoder = ffmpeg.hw_accel.as_encoder_str();
+
         // Join audio to concatenated video.
         let output = Command::new(&ffmpeg.ffmpeg)
             .current_dir(sink.work_dir())
@@ -229,7 +226,13 @@ impl Assembly {
             .arg(&audio_out.path)
             .args(&["-f", "concat", "-safe", "0", "-i"])
             .arg(&self.video_path)
-            .args(&["-c:v", "libx264", "-framerate", "2", "-preset", "fast", "-c:a", "aac", "-vf", "scale=w=1920:h=1080:force_original_aspect_ratio=decrease:flags=lanczos"])
+            .arg("-i")
+            .arg(&meta)
+            .args(&["-map_metadata", "2"])
+            // FIXME: use `h264_nvenc` or `h264_vaapi` where available.
+            // Find out how to probe for these.
+            .args(&["-c:v", hw_encoder, "-framerate", "2", "-preset", "fast", "-c:a", "aac"])
+            .args(&["-vf", "scale=w=1920:h=1080:force_original_aspect_ratio=decrease:flags=lanczos"])
             .arg(&video_out.path)
             .output()?;
 
@@ -243,6 +246,51 @@ impl Assembly {
         sink.import(video_out.path);
 
         Ok(())
+    }
+
+    fn create_meta_data(&self, sink: &mut Sink) -> Result<PathBuf, FatalError> {
+        use std::io::Write as _;
+
+        let meta = sink.unique_path()?;
+        let meta_file = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(&meta.path)?;
+
+        writeln!(
+            &meta_file,
+            ";FFMETADATA1\n\
+            title=Created with vid-from-pdf",
+        )?;
+
+        let mut up_to_now = 0.0;
+        for (idx, (_, ch_len)) in self.slide_list.iter().enumerate() {
+            let start = up_to_now;
+            up_to_now += ch_len;
+            writeln!(
+                &meta_file,
+                "[CHAPTER]\n\
+                TIMEBASE=1/1000\n\
+                START={start}\n\
+                END={end}\n\
+                title=Chapter {chapter_idx}",
+                start=(start*1000.0) as u64,
+                end=(up_to_now*1000.0) as u64,
+                chapter_idx=idx+1,
+            )?;
+        }
+
+        Ok(meta.path)
+    }
+}
+
+impl HwAccelFlavor {
+    pub fn as_encoder_str(self) -> &'static str {
+        match self {
+            HwAccelFlavor::None => "libx264",
+            HwAccelFlavor::VdPau => "h264_vdpau",
+            HwAccelFlavor::NvEnc => "h264_nvenc",
+        }
     }
 }
 
