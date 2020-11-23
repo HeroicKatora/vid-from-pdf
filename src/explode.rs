@@ -23,7 +23,19 @@ pub enum LoadPdfExploderError {
 
 impl ExplodePdf for PdfToPpm {
     fn explode(&self, src: &mut dyn Source, sink: &mut Sink) -> Result<(), FatalError> {
-        PdfToPpm::explode(self, src, sink)
+        PdfToPpm::explode(self, src, sink)?;
+        let paths = sink.imported().collect::<Vec<_>>();
+        for mut path in paths {
+            let image = image::io::Reader::open(&path)?
+                .with_guessed_format()?
+                .decode()?;
+            let image = image.resize_to_fill(1920, 1080,
+                image::imageops::FilterType::Lanczos3);
+            path.set_extension("ppm");
+            image.save(&path)?;
+            sink.import(path);
+        }
+        Ok(())
     }
 
     fn verbose_describe(&self, into: &mut dyn io::Write) -> Result<(), FatalError> {
