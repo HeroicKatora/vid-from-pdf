@@ -47,6 +47,19 @@ git = "https://github.com/HeroicKatora/image-png/"
 # Look at its description for more information.
 rev = "72854c54307349b1c75bfdcdb2c4baa27eb01617"
 
+[dependencies.pdf-extract]
+version = "0.6"
+optional = true
+[dependencies.lopdf]
+version = "0.24"
+optional = true
+
+[features]
+# FIXME: don't enable by default.
+# default = ["no-pdftoppm"]
+# Replace pdftoppm with Rust crates.
+no-pdftoppm = ["pdf-extract", "lopdf"]
+
 [build-dependencies]
 auditable-build = "0.1"
 

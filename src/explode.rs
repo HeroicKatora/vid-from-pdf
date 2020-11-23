@@ -17,6 +17,8 @@ struct PdfToPpm {
     exe: CanonicalPath,
 }
 
+struct PdfExtractRs {}
+
 pub enum LoadPdfExploderError {
     CantFindPdfToPpm(RequiredToolError),
 }
@@ -107,8 +109,13 @@ impl PdfToPpm {
 
 impl dyn ExplodePdf {
     pub fn new() -> Result<Box<Self>, LoadPdfExploderError> {
-        let pdf_to_ppm = PdfToPpm::new()?;
-        Ok(Box::new(pdf_to_ppm))
+        // TODO: detect if ffmpeg was compiled with librsvg.
+        #[cfg(feature = "no-pdftoppm")] {
+            Ok(Box::new(PdfExtractRs {}))
+        }
+        #[cfg(not(eature = "no-pdftoppm"))] {
+            Ok(Box::new(PdfToPpm::new()?))
+        }
     }
 }
 
@@ -119,5 +126,86 @@ impl fmt::Display for LoadPdfExploderError {
                 write!(f, "{}", err)
             }
         }
+    }
+}
+
+#[cfg(feature = "no-pdftoppm")]
+impl ExplodePdf for PdfExtractRs {
+    fn explode(&self, src: &mut dyn Source, sink: &mut Sink) -> Result<(), FatalError> {
+        use pdf_extract::{MediaBox, OutputError, Transform};
+
+        struct PagedSvg<'sink> {
+            sink: &'sink mut Sink,
+            file: Option<io::BufWriter<fs::File>>,
+        }
+
+        impl PagedSvg<'_> {
+            fn in_page(&mut self) -> SVGOutput<'_> {
+                SVGOutput::new(self.file.as_mut().unwrap())
+            }
+        }
+
+        impl pdf_extract::OutputDev for PagedSvg<'_> {
+            fn begin_page(
+                &mut self,
+                page_num: u32,
+                media_box: &MediaBox,
+                art_box: Option<(f64, f64, f64, f64)>,
+            ) -> Result<(), OutputError> {
+                let unique = self.sink.unique_path().unwrap();
+                let file = fs::OpenOptions::new().create(true).write(true).open(unique.path)?;
+                self.file = Some(io::BufWriter::new(file));
+                self.in_page().begin_page(page_num, media_box, art_box)
+            }
+            fn end_page(&mut self) -> Result<(), OutputError> {
+                use std::io::Write as _;
+                self.in_page().end_page()?;
+                let mut file = self.file.take().unwrap();
+                file.flush()?;
+                Ok(())
+            }
+            fn output_character(
+                &mut self,
+                trm: &Transform,
+                width: f64,
+                spacing: f64,
+                font_size: f64,
+                char: &str
+            ) -> Result<(), OutputError> {
+                self.in_page().output_character(trm, width, spacing, font_size, char)
+            }
+            fn begin_word(&mut self) -> Result<(), OutputError> {
+                self.in_page().begin_word()
+            }
+            fn end_word(&mut self) -> Result<(), OutputError> {
+                self.in_page().end_word()
+            }
+            fn end_line(&mut self) -> Result<(), OutputError> {
+                self.in_page().end_line()
+            }
+        }
+
+        use lopdf::Document;
+        use pdf_extract::{SVGOutput, output_doc};
+
+        let document = if let Some(path) = src.as_path() {
+            // FIXME: error
+            Document::load(path).unwrap()
+        } else {
+            let file = sink.store_to_file(src.as_buf_read())?;
+            // FIXME: error
+            Document::load(file).unwrap()
+        };
+
+        let mut paged = PagedSvg { sink, file: None };
+        // FIXME: error
+        output_doc(&document, &mut paged).unwrap();
+
+        todo!()
+    }
+
+    fn verbose_describe(&self, into: &mut dyn io::Write) -> Result<(), FatalError> {
+        writeln!(into, "Using Rust crate `pdf-extract` to deconstruct pdf")?;
+        Ok(())
     }
 }
