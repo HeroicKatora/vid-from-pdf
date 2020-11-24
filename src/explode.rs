@@ -1,5 +1,6 @@
 /// Turn a pdf into multiple images of that each page.
 use std::{collections::BTreeMap, fmt, fs, io, process::Command};
+use image::{io::Reader as ImageReader, imageops};
 use which::CanonicalPath;
 
 use crate::FatalError;
@@ -28,11 +29,10 @@ impl ExplodePdf for PdfToPpm {
         PdfToPpm::explode(self, src, sink)?;
         let paths = sink.imported().collect::<Vec<_>>();
         for mut path in paths {
-            let image = image::io::Reader::open(&path)?
+            let image = ImageReader::open(&path)?
                 .with_guessed_format()?
                 .decode()?;
-            let image = image.resize(1920, 1080,
-                image::imageops::FilterType::Lanczos3);
+            let image = image.resize(1920, 1080, imageops::FilterType::Lanczos3);
             path.set_extension("ppm");
             image.save(&path)?;
             sink.import(path);

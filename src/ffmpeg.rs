@@ -1,4 +1,5 @@
 use std::{fmt, fs, io, process::Command, process::Stdio, path::PathBuf};
+use libloading::{Library, Symbol,library_filename};
 use which::CanonicalPath;
 
 use crate::FatalError;
@@ -86,8 +87,8 @@ impl Ffmpeg {
     }
 
     fn detect_hardware_accel() -> HwAccelFlavor {
-        let filename = libloading::library_filename("avcodec");
-        let library = match libloading::Library::new(filename) {
+        let filename = library_filename("avcodec");
+        let library = match Library::new(filename) {
             Ok(lib) => lib,
             Err(_) => return HwAccelFlavor::None,
         };
@@ -95,7 +96,7 @@ impl Ffmpeg {
         type Type = unsafe fn(name: *const std::os::raw::c_char) -> *const std::os::raw::c_void;
         // SAFETY: that's a function pointer according to libavcodec.
         // We also don't leak that pointer statically as the type would technically permit.
-        let avcodec_find_encoder_by_name: libloading::Symbol<Type> = unsafe {
+        let avcodec_find_encoder_by_name: Symbol<Type> = unsafe {
             match library.get(b"avcodec_find_encoder_by_name\0") {
                 Ok(fn_symbol) => fn_symbol,
                 Err(_) => return HwAccelFlavor::None,

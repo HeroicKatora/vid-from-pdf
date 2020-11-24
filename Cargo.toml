@@ -41,12 +41,6 @@ features = ["h1-server", "logger", "sessions"]
 version = "0.23.12"
 default-features = false
 features = ["png", "pnm"]
-[dependencies.png]
-git = "https://github.com/HeroicKatora/image-png/"
-# This is a Github-created automatic merge head for PR 255.
-# Don't be alarmed if you can not find it in the history.
-# Look at its description for more information.
-rev = "72854c54307349b1c75bfdcdb2c4baa27eb01617"
 
 [dependencies.pdf-extract]
 version = "0.6"

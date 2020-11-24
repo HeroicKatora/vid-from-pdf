@@ -59,8 +59,6 @@ pub enum FatalError {
     Corrupt(serde_json::Error),
     /// Some error in image conversion.
     Image(image::error::ImageError),
-    /// We passed a really bad parameter to apng encoding.
-    Apng(png::EncodingError),
 }
 
 impl From<std::io::Error> for FatalError {
@@ -75,12 +73,6 @@ impl From<image::error::ImageError> for FatalError {
     }
 }
 
-impl From<png::EncodingError> for FatalError {
-    fn from(err: png::EncodingError) -> FatalError {
-        FatalError::Apng(err)
-    }
-}
-
 impl fmt::Debug for FatalError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "The program will quit due to a fatal error.")?;
@@ -89,7 +81,6 @@ impl fmt::Debug for FatalError {
             FatalError::Io(io) => write!(f, "I/O error: {:?}", io),
             FatalError::Corrupt(err) => write!(f, "Corrupt data structure: {:?}", err),
             FatalError::Image(err) => write!(f, "Bad image data: {:?}", err),
-            FatalError::Apng(err) => write!(f, "Bad apng sequence: {:?}", err),
         }
     }
 }

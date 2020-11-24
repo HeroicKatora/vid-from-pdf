@@ -1039,7 +1039,7 @@ dependencies = [
  "num-iter",
  "num-rational",
  "num-traits",
- "png 0.16.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "png",
 ]
 
 [[package]]
@@ -1489,17 +1489,6 @@ dependencies = [
  "crc32fast",
  "deflate",
  "miniz_oxide 0.3.7",
-]
-
-[[package]]
-name = "png"
-version = "0.16.7"
-source = "git+https://github.com/HeroicKatora/image-png/?rev=72854c54307349b1c75bfdcdb2c4baa27eb01617#72854c54307349b1c75bfdcdb2c4baa27eb01617"
-dependencies = [
- "bitflags",
- "crc32fast",
- "deflate",
- "miniz_oxide 0.4.3",
 ]
 
 [[package]]
@@ -2261,7 +2250,6 @@ dependencies = [
  "libloading",
  "lopdf",
  "pdf-extract",
- "png 0.16.7 (git+https://github.com/HeroicKatora/image-png/?rev=72854c54307349b1c75bfdcdb2c4baa27eb01617)",
  "rand",
  "rust-embed",
  "serde",
