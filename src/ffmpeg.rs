@@ -43,11 +43,6 @@ pub enum LoadFfmpegError {
     VersionNumberIsUnrecognized(String),
 }
 
-#[link(name="avcodec", kind="dylib")]
-extern "C" {
-    fn avcodec_find_encoder_by_name(name: *const std::os::raw::c_char) -> *const std::os::raw::c_void;
-}
-
 impl Ffmpeg {
     pub fn new() -> Result<Ffmpeg, LoadFfmpegError> {
         let ffprobe = require_tool("ffprobe")?;
@@ -91,6 +86,22 @@ impl Ffmpeg {
     }
 
     fn detect_hardware_accel() -> HwAccelFlavor {
+        let filename = libloading::library_filename("avcodec");
+        let library = match libloading::Library::new(filename) {
+            Ok(lib) => lib,
+            Err(_) => return HwAccelFlavor::None,
+        };
+
+        type Type = unsafe fn(name: *const std::os::raw::c_char) -> *const std::os::raw::c_void;
+        // SAFETY: that's a function pointer according to libavcodec.
+        // We also don't leak that pointer statically as the type would technically permit.
+        let avcodec_find_encoder_by_name: libloading::Symbol<Type> = unsafe {
+            match library.get(b"avcodec_find_encoder_by_name\0") {
+                Ok(fn_symbol) => fn_symbol,
+                Err(_) => return HwAccelFlavor::None,
+            }
+        };
+
         const NVENC_NAME: &'static str = "h264_nvenc\0";
         const VDPAU_NAME: &'static str = "h264_vdpau\0";
 

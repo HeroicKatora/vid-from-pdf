@@ -1174,6 +1174,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "libloading"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1090080fe06ec2648d0da3881d9453d97e71a45f00eb179af7fdd7e3f686fdb0"
+dependencies = [
+ "cfg-if 1.0.0",
+ "winapi",
+]
+
+[[package]]
 name = "linked-hash-map"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2248,6 +2258,7 @@ dependencies = [
  "crossterm",
  "image",
  "index-ext",
+ "libloading",
  "lopdf",
  "pdf-extract",
  "png 0.16.7 (git+https://github.com/HeroicKatora/image-png/?rev=72854c54307349b1c75bfdcdb2c4baa27eb01617)",
