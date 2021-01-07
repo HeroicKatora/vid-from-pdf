@@ -59,6 +59,12 @@ pub enum FatalError {
     Corrupt(serde_json::Error),
     /// Some error in image conversion.
     Image(image::error::ImageError),
+    /// Some error while rendering to svg.
+    Svg(svg_to_image::Error),
+    /// An input slide that we could not convert to a pixmap.
+    /// This is a theoretical concern as everything is SVG which we try to render. However, just
+    /// preparing for future ideas where this might be more dynamic.
+    UnrecognizedInputSlide,
 }
 
 impl From<std::io::Error> for FatalError {
@@ -73,14 +79,22 @@ impl From<image::error::ImageError> for FatalError {
     }
 }
 
+impl From<svg_to_image::Error> for FatalError {
+    fn from(err: svg_to_image::Error) -> FatalError {
+        FatalError::Svg(err)
+    }
+}
+
 impl fmt::Debug for FatalError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "The program will quit due to a fatal error.")?;
         writeln!(f, "This should never happen and might be caused by a bad installation.")?;
         match self {
-            FatalError::Io(io) => write!(f, "I/O error: {:?}", io),
+            FatalError::Io(io) => write!(f, "I/O error: {}", io),
             FatalError::Corrupt(err) => write!(f, "Corrupt data structure: {:?}", err),
             FatalError::Image(err) => write!(f, "Bad image data: {:?}", err),
+            FatalError::Svg(err) => write!(f, "Could not convert svg to pixmap: {:?}", err),
+            FatalError::UnrecognizedInputSlide => write!(f, "An input slide was in unrecognized image format after conversion"),
         }
     }
 }

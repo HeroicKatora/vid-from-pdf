@@ -1,6 +1,7 @@
 /// Turn a pdf into multiple images of that each page.
 use std::{collections::BTreeMap, fmt, fs, io, process::Command};
 use image::{io::Reader as ImageReader, imageops};
+use mupdf::Document;
 use which::CanonicalPath;
 
 use crate::FatalError;
@@ -18,7 +19,7 @@ struct PdfToPpm {
     exe: CanonicalPath,
 }
 
-struct PdfExtractRs {}
+struct MuPdf {}
 
 pub enum LoadPdfExploderError {
     CantFindPdfToPpm(RequiredToolError),
@@ -110,12 +111,7 @@ impl PdfToPpm {
 impl dyn ExplodePdf {
     pub fn new() -> Result<Box<Self>, LoadPdfExploderError> {
         // TODO: detect if ffmpeg was compiled with librsvg.
-        #[cfg(feature = "no-pdftoppm")] {
-            Ok(Box::new(PdfExtractRs {}))
-        }
-        #[cfg(not(eature = "no-pdftoppm"))] {
-            Ok(Box::new(PdfToPpm::new()?))
-        }
+        Ok(Box::new(MuPdf {}))
     }
 }
 
@@ -129,83 +125,59 @@ impl fmt::Display for LoadPdfExploderError {
     }
 }
 
-#[cfg(feature = "no-pdftoppm")]
-impl ExplodePdf for PdfExtractRs {
+impl MuPdf {
+    /// Rescale page and normalize placement without distorting.
+    fn normalize_page_matrix(&self, bounds: mupdf::Rect) -> mupdf::Matrix {
+        let (width, height) = (bounds.width(), bounds.height());
+        let origin = bounds.origin();
+
+        let mut matrix = mupdf::Matrix::IDENTITY;
+        let scale_w = 1920.0/width;
+        let scale_h = 1080.0/height;
+        // Scale to contain.
+        let scale = scale_w.min(scale_h);
+        matrix.pre_translate(-origin.x, -origin.y);
+        matrix.scale(scale, scale);
+
+        matrix
+    }
+
+    fn convert_document(&self, path: &str, sink: &mut Sink) -> Result<(), mupdf::Error> {
+        let document = Document::open(path)?;
+
+        for page in &document {
+            let page = page?;
+            let matrix = self.normalize_page_matrix(page.bounds()?);
+            let mut svg = io::Cursor::new(page.to_svg(&matrix)?);
+            let filepath = sink.store_to_file(&mut svg)?;
+            sink.import(filepath);
+        }
+
+        Ok(())
+    }
+}
+
+impl ExplodePdf for MuPdf {
     fn explode(&self, src: &mut dyn Source, sink: &mut Sink) -> Result<(), FatalError> {
-        use pdf_extract::{MediaBox, OutputError, Transform};
-
-        struct PagedSvg<'sink> {
-            sink: &'sink mut Sink,
-            file: Option<io::BufWriter<fs::File>>,
+        let path = sink.store_to_file(src.as_buf_read())?;
+        match path.to_str() {
+            None => Err(FatalError::Io(io::Error::new(
+                io::ErrorKind::Other,
+                "Non-UTF8 path is not supported",
+            ))),
+            Some(path) => self.convert_document(path, sink).map_err(fatal_pdf_page)
         }
-
-        impl PagedSvg<'_> {
-            fn in_page(&mut self) -> SVGOutput<'_> {
-                SVGOutput::new(self.file.as_mut().unwrap())
-            }
-        }
-
-        impl pdf_extract::OutputDev for PagedSvg<'_> {
-            fn begin_page(
-                &mut self,
-                page_num: u32,
-                media_box: &MediaBox,
-                art_box: Option<(f64, f64, f64, f64)>,
-            ) -> Result<(), OutputError> {
-                let unique = self.sink.unique_path().unwrap();
-                let file = fs::OpenOptions::new().create(true).write(true).open(unique.path)?;
-                self.file = Some(io::BufWriter::new(file));
-                self.in_page().begin_page(page_num, media_box, art_box)
-            }
-            fn end_page(&mut self) -> Result<(), OutputError> {
-                use std::io::Write as _;
-                self.in_page().end_page()?;
-                let mut file = self.file.take().unwrap();
-                file.flush()?;
-                Ok(())
-            }
-            fn output_character(
-                &mut self,
-                trm: &Transform,
-                width: f64,
-                spacing: f64,
-                font_size: f64,
-                char: &str
-            ) -> Result<(), OutputError> {
-                self.in_page().output_character(trm, width, spacing, font_size, char)
-            }
-            fn begin_word(&mut self) -> Result<(), OutputError> {
-                self.in_page().begin_word()
-            }
-            fn end_word(&mut self) -> Result<(), OutputError> {
-                self.in_page().end_word()
-            }
-            fn end_line(&mut self) -> Result<(), OutputError> {
-                self.in_page().end_line()
-            }
-        }
-
-        use lopdf::Document;
-        use pdf_extract::{SVGOutput, output_doc};
-
-        let document = if let Some(path) = src.as_path() {
-            // FIXME: error
-            Document::load(path).unwrap()
-        } else {
-            let file = sink.store_to_file(src.as_buf_read())?;
-            // FIXME: error
-            Document::load(file).unwrap()
-        };
-
-        let mut paged = PagedSvg { sink, file: None };
-        // FIXME: error
-        output_doc(&document, &mut paged).unwrap();
-
-        todo!()
     }
 
     fn verbose_describe(&self, into: &mut dyn io::Write) -> Result<(), FatalError> {
-        writeln!(into, "Using Rust crate `pdf-extract` to deconstruct pdf")?;
+        writeln!(into, "Using `mupdf` to deconstruct pdf")?;
         Ok(())
     }
+}
+
+fn fatal_pdf_page(err: mupdf::Error) -> FatalError {
+    FatalError::Io(io::Error::new(
+        io::ErrorKind::Other,
+        err
+    ))
 }

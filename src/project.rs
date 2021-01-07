@@ -31,6 +31,8 @@ pub struct Slide {
     pub audio: Option<PathBuf>,
     /// The visual, converted to PNG.
     pub png: Option<PathBuf>,
+    /// The visual, converted to SVG.
+    pub svg: Option<PathBuf>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -127,10 +129,8 @@ impl Project {
     pub fn assemble(&mut self, app: &App) -> Result<(), FatalError> {
         let mut assembly = Assembly::new(&mut self.dir)?;
 
-        for slide in &self.meta.slides {
-            let visual = match &slide.visual {
-                Visual::Slide { src, .. } => FileSource::new_from_existing(src.clone())?,
-            };
+        for slide in &mut self.meta.slides {
+            let visual = slide.render_visual(&mut self.dir, app)?;
             let audio = match &slide.audio {
                 None => {
                     let path = self.meta.replacement.silent_audio(&mut self.dir, app)?;
@@ -161,8 +161,10 @@ impl Project {
         for slide in &mut self.meta.slides {
             match slide.visual {
                 Visual::Slide { ref src, .. } => {
-                    let path = self.meta.replacement.convert_ppm_to_png(&mut self.dir, src)?;
-                    slide.png = Some(path);
+                    let mut path = src.clone();
+                    path.set_extension("svg");
+                    fs::copy(src, &path)?;
+                    slide.svg = Some(path);
                 }
             }
         }
@@ -189,6 +191,7 @@ impl Project {
                 visual: Visual::Slide { src, idx, },
                 audio: None,
                 png: None,
+                svg: None,
             })
         }
 
@@ -196,6 +199,39 @@ impl Project {
     }
 
     const PROJECT_META: &'static str = ".project";
+}
+
+impl Slide {
+    fn render_visual(&mut self, sink: &mut Sink, _: &App) -> Result<FileSource, FatalError> {
+        // Shortcut, if we already have a pixmap.
+        if let Some(src) = &self.png {
+            let file_source = FileSource::new_from_existing(src.clone())?;
+            return Ok(file_source);
+        }
+
+        match &self.visual {
+            Visual::Slide { src, .. } => {
+                let mut path = src.clone();
+                // usvg is picky about file endings. GEEEEEEEZ.
+                path.set_extension("svg");
+                fs::copy(src, &path)?;
+                self.svg = Some(path);
+                let path = self.svg.as_ref().unwrap();
+                let svg = svg_to_image::Svg::open(path)?;
+                let image = svg.render()?;
+                let unique = sink.unique_path()?;
+                image.save_with_format(&unique.path, image::ImageFormat::Png)?;
+                self.png = Some(unique.path);
+            },
+        }
+
+        if let Some(png) = &self.png {
+            let file_source = FileSource::new_from_existing(png.clone())?;
+            Ok(file_source)
+        } else {
+            Err(FatalError::UnrecognizedInputSlide)
+        }
+    }
 }
 
 impl Replacement {
