@@ -26,9 +26,6 @@ pub struct Limits {
     pub meta_size: AtomicU64,
 }
 
-impl App {
-}
-
 impl Limits {
     pub fn meta_size(&self) -> u64 {
         self.meta_size.load(Ordering::Relaxed)

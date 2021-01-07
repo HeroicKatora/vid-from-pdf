@@ -51,13 +51,33 @@ main>.pseudo-image {
 }
 #projectLayout {
   display: grid;
-  grid-template-columns: minmax(66%, 2fr) minmax(33%, 1fr);
+  grid-template-columns:
+    minmax(33%, 1fr)
+    minmax(66%, 2fr);
+  grid-template-rows:
+    minmax(66%, 1fr)
+    minmax(10%, 10%)
+    minmax(10%, 10%);
+  grid-template-areas:
+    "bar frame"
+    "bar audio"
+    "finish finish";
   column-gap: 1ch;
 }
-#pageListSidebar {
+#projectSlide {
+  grid-area: frame;
+}
+#projectPageListSidebar {
+  grid-area: bar;
   max-height: 60vh;
   width: 100%;
   overflow-y: auto;
+}
+#projectAudio {
+  grid-area: audio;
+}
+#projectFinish {
+  grid-area: finish;
 }
 .page-preview,.page-preview>img {
   height: 6em;

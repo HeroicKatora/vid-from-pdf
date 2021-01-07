@@ -8,20 +8,24 @@
   <template id="templateProject">
     <h2 data-translation-id="edit-header">Edit page audio</h2>
     <div id="projectLayout">
-      <picture class="output-video">
+      <picture id="projectSlide" class="output-video">
         <img id="outputVideoReplacement"></img>
         <span data-translation-id="edit-instructions">Complete audio selection and click Generate.</span>
       </picture>
-      <div id="pageListSidebar">
+      <div id="projectPageListSidebar">
         <ol id="pageList"></ol>
       </div>
-      <audio controls id="pageAudio"></audio>
-      <div id="pageAudioSetter">
-        <input class="matter-button-outlined" type="file" accept="audio/*"></input>
-        <button class="matter-button-outlined " data-translation-id="edit-assign-audio">Assign audio</button>
+      <div id="projectAudio">
+        <audio controls id="pageAudio"></audio>
+        <div id="pageAudioSetter">
+          <input class="matter-button-outlined" type="file" accept="audio/*"></input>
+          <button class="matter-button-outlined " data-translation-id="edit-assign-audio">Assign audio</button>
+        </div>
       </div>
-      <button class="matter-button-outlined" id="createVideo" data-translation-id='edit-generate'>Generate</button>
-      <button class="matter-button-outlined" id="downloadVideo" disabled data-translation-id='edit-download'>Download</button>
+      <div id="projectFinish">
+        <button class="matter-button-outlined" id="createVideo" data-translation-id='edit-generate'>Generate</button>
+        <button class="matter-button-outlined" id="downloadVideo" disabled data-translation-id='edit-download'>Download</button>
+      </div>
     </div>
   </template>
   <template id="templatePage">

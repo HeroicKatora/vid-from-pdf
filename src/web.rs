@@ -1,4 +1,4 @@
-use std::{fmt, io, path, sync::Arc};
+use std::{fmt, fs, io, path, sync::Arc};
 
 use serde::Serialize;
 use tokio::runtime;
@@ -14,8 +14,16 @@ use crate::app::App;
 use crate::project::{Project, Visual};
 
 pub fn serve(app: App) -> Result<(), FatalError> {
+
     let state = Web::new(app)?;
     let app = tide_app(state);
+
+    let static_data = app.state().arc.clone();
+    // Don't care if our hook is not there for now, just missing cleanup then.
+    let _ = ctrlc::set_handler(move || {
+        let _ = fs::remove_dir_all(static_data.app.tempdir.path());
+        std::process::exit(0);
+    });
 
     let rt = runtime::Builder::new_current_thread().build()?;
 
