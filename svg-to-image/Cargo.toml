@@ -1,5 +1,5 @@
 [package]
-name = "pdf-to-image"
+name = "svg-to-image"
 version = "0.0.0"
 authors = ["Andreas Molzer <andreas.molzer@gmx.de>"]
 edition = "2018"

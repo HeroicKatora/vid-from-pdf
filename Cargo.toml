@@ -44,6 +44,8 @@ features = ["png", "pnm"]
 
 [dependencies.mupdf]
 version = "0.0.6"
+[dependencies.svg-to-image]
+path = "svg-to-image"
 
 [build-dependencies]
 auditable-build = "0.1"
@@ -51,3 +53,8 @@ auditable-build = "0.1"
 [profile.dev.package."*"]
 opt-level = 3
 debug = false
+
+[workspace]
+members = [
+  "svg-to-image"
+]
