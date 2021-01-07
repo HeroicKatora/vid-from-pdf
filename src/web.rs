@@ -93,7 +93,9 @@ fn serialize_project(project: &Project) -> impl Serialize {
         Page {
             img_url: match slide.visual {
                 Visual::Slide { ref src, .. } => {
-                    Some(if let Some(ref png) = slide.png {
+                    Some(if let Some(ref svg) = slide.svg {
+                        project_asset_url(svg)
+                    } else if let Some(ref png) = slide.png {
                         project_asset_url(png)
                     } else {
                         project_asset_url(src)
