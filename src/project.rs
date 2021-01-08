@@ -202,7 +202,7 @@ impl Project {
 }
 
 impl Slide {
-    fn render_visual(&mut self, sink: &mut Sink, _: &App) -> Result<FileSource, FatalError> {
+    fn render_visual(&mut self, sink: &mut Sink, app: &App) -> Result<FileSource, FatalError> {
         // Shortcut, if we already have a pixmap.
         if let Some(src) = &self.png {
             let file_source = FileSource::new_from_existing(src.clone())?;
@@ -217,7 +217,8 @@ impl Slide {
                 fs::copy(src, &path)?;
                 self.svg = Some(path);
                 let path = self.svg.as_ref().unwrap();
-                let svg = svg_to_image::Svg::open(path)?;
+
+                let svg = app.magick.open(path)?;
                 let image = svg.render()?;
                 let unique = sink.unique_path()?;
                 image.save_with_format(&unique.path, image::ImageFormat::Png)?;

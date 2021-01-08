@@ -8,6 +8,7 @@ edition = "2018"
 image = { version = "0.23.12", default-features = false }
 usvg = "0.13"
 subprocess = "0.2.6"
+which = "4"
 
 # For pathfinder based GPU rasterization.
 old_usvg = { package = "usvg", version = "0.9", optional = true }
@@ -40,3 +41,8 @@ render_resvg = [
   "resvg",
   "tiny-skia",
 ]
+
+[dev-dependencies.image]
+version = "0.23.12"
+default-features = false
+features = ["pnm"]

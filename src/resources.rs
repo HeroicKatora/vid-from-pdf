@@ -1,4 +1,5 @@
 use std::{env, fmt, ffi::OsString, io::Write as _, path::Path};
+use svg_to_image::MagickConvert;
 use tempfile::TempDir;
 use which::CanonicalPath;
 
@@ -18,6 +19,7 @@ pub struct Configuration {
 
 pub struct Resources {
     pub ffmpeg: Ffmpeg,
+    pub magick: svg_to_image::MagickConvert,
     pub tempdir: TempDir,
     pub dir_as_sink: Sink,
     pub explode: Box<dyn ExplodePdf>,
@@ -39,11 +41,15 @@ impl Resources {
     pub fn force(cfg: &Configuration) -> Result<Self, FatalError> {
         // First, try and load all parts. Then give a condensed message with all missing parts.
         let ffmpeg = Ffmpeg::new();
+        let magick = require_tool(MagickConvert::MAGICK);
         let tempdir = cfg.new_tempdir();
         let explode = ExplodePdf::new();
 
         let mut report = cfg.error_reporter();
         if let Err(err) = &ffmpeg {
+            report.eat_err(err);
+        }
+        if let Err(err) = &magick {
             report.eat_err(err);
         }
         if let Err(err) = &tempdir {
@@ -55,12 +61,14 @@ impl Resources {
         report.assert()?;
 
         let ffmpeg = ffmpeg.unwrap_or_else(|_| unreachable!());
+        let magick = magick.unwrap_or_else(|_| unreachable!());
         let tempdir = tempdir.unwrap_or_else(|_| unreachable!());
         let sink = Sink::new(tempdir.path().to_owned())?;
         let explode = explode.unwrap_or_else(|_| unreachable!());
 
         Ok(Resources {
             ffmpeg,
+            magick: MagickConvert::new(magick)?,
             tempdir,
             dir_as_sink: sink,
             explode,
