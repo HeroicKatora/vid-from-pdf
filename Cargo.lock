@@ -2742,6 +2742,7 @@ dependencies = [
  "tiny-skia",
  "usvg 0.13.0",
  "usvg 0.9.1",
+ "which 4.0.2",
 ]
 
 [[package]]

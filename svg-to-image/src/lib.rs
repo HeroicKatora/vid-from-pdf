@@ -3,11 +3,17 @@ use std::{io, path::Path};
 
 pub struct Svg {
     pub tree: usvg::Tree,
+    magick: MagickConvert,
 }
 
 #[derive(Debug)]
 pub struct Error {
     kind: ErrorKind,
+}
+
+#[derive(Clone)]
+pub struct MagickConvert {
+    magick: which::CanonicalPath,
 }
 
 #[derive(Debug)]
@@ -20,24 +26,16 @@ enum ErrorKind {
         status: subprocess::ExitStatus,
         stderr: Vec<u8>,
     },
+    RequiredTool {
+        tool: &'static str,
+        information: Option<Box<str>>,
+    },
     // No further information.
     Resvg,
     UnsupportedRenderMethod(&'static str),
 }
 
 impl Svg {
-    pub fn open(path: &Path) -> Result<Self, Error> {
-        let mut options = usvg::Options::default();
-        options.fontdb.load_system_fonts();
-
-        if options.fontdb.is_empty() {
-            panic!("failed to find system fonts for loading");
-        }
-
-        let tree = usvg::Tree::from_file(path, &options)?;
-        Ok(tree.into())
-    }
-
     pub fn render(&self) -> Result<image::DynamicImage, Error> {
         // choose renderer.
         if cfg!(render_pathfinder) {
@@ -59,14 +57,15 @@ impl Svg {
 
             return Ok(image::DynamicImage::ImageRgba8(image));
         } else {
-            self.render_convert()
+            self.render_convert(&self.magick)
         }
     }
 
-    fn render_convert(&self) -> Result<image::DynamicImage, Error> {
+    fn render_convert(&self, magick: &MagickConvert) -> Result<image::DynamicImage, Error> {
         let tree = self.tree.to_string(Default::default());
-        let exec = subprocess::Exec::cmd("convert")
-            .arg("-")
+        let exec = subprocess::Exec::cmd(&magick.magick)
+            .arg("convert")
+            .arg("svg:-")
             .arg("ppm:-")
             .stdin(tree.into_bytes())
             .stdout(subprocess::Redirection::Pipe)
@@ -155,9 +154,127 @@ impl Svg {
     }
 }
 
-impl From<usvg::Tree> for Svg {
-    fn from(tree: usvg::Tree) -> Self {
-        Svg { tree }
+impl MagickConvert {
+    pub const MAGICK: &'static str = "magick";
+
+    pub fn new(magick: which::CanonicalPath) -> Result<Self, Error> {
+        let formats = subprocess::Exec::cmd(&magick)
+            .arg("identify")
+            .arg("-list")
+            .arg("format")
+            .stdin(subprocess::Redirection::None)
+            .stdout(subprocess::Redirection::Pipe)
+            .stderr(subprocess::Redirection::Pipe)
+            // Should we limit the output?
+            .capture()?;
+
+        let lines = match String::from_utf8(formats.stdout) {
+            Err(_) => return Err(Error {
+                kind: ErrorKind::RequiredTool {
+                    tool: "convert",
+                    information: None,
+                },
+            }),
+            Ok(string) => string,
+        };
+
+        if let Some(true) = Self::check_svg_read(&lines) {} else {
+            return Err(Error {
+                kind: ErrorKind::RequiredTool {
+                    tool: "convert",
+                    information: Some("SVG read support".into()),
+                }
+            });
+        }
+
+        if let Some(true) = Self::check_ppm_write(&lines) {} else {
+            return Err(Error {
+                kind: ErrorKind::RequiredTool {
+                    tool: "convert",
+                    information: Some("PPM write support".into()),
+                }
+            });
+        }
+
+        Ok(MagickConvert {
+            magick,
+        })
+    }
+
+    pub fn path(&self) -> &Path {
+        self.magick.as_path()
+    }
+
+    pub fn open(&self, path: &Path) -> Result<Svg, Error> {
+        let mut options = usvg::Options::default();
+        options.fontdb.load_system_fonts();
+
+        if options.fontdb.is_empty() {
+            panic!("failed to find system fonts for loading");
+        }
+
+        let tree = usvg::Tree::from_file(path, &options)?;
+        Ok(Svg {
+            tree,
+            magick: self.clone(),
+        })
+    }
+
+    /// Prepare converting a particular SVG tree.
+    pub fn with_tree(&self, tree: usvg::Tree) -> Svg {
+        Svg {
+            tree,
+            magick: self.clone(),
+        }
+    }
+
+    fn check_svg_read(st: &str) -> Option<bool> {
+        Self::check_format_support(st, "SVG", |mode| {
+            Some('r') == mode.chars().next()
+        })
+    }
+
+    fn check_ppm_write(st: &str) -> Option<bool> {
+        Self::check_format_support(st, "PPM", |mode| {
+            Some('w') == mode.chars().nth(1)
+        })
+    }
+
+    fn check_format_support(st: &str, format: &str, test_mode: impl Fn(&str) -> bool)
+        -> Option<bool>
+    {
+        let svg_spec = st
+            .lines()
+            .filter(|line| line.contains(format));
+
+        for line in svg_spec {
+            // Each line in the format table is of the form:
+            //    Format  Module    Mode  Description
+            // Mode is a subset of rw+, where + means multiple images per file.
+            let line = line.trim_start();
+
+            if !line.starts_with(format) {
+                continue;
+            }
+
+            let format = if let Some(pos) = line.find(' ') {
+                line[pos..].trim_start()
+            } else {
+                continue;
+            };
+
+            let mode = if let Some(pos) = format.find(' ') {
+                format[pos..].trim_start()
+            } else {
+                continue;
+            };
+
+            if test_mode(mode) {
+                return Some(true);
+            }
+        }
+
+        Some(false)
     }
 }
 
@@ -206,7 +323,12 @@ fn simple() {
     use image::GenericImageView;
 
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/test.svg");
-    let svg = Svg::open(Path::new(path))
+    let magic = which::CanonicalPath::new("magick")
+        .expect("Magick convert not found");
+    let convert = MagickConvert::new(magic)
+        .expect("Magick does not support required format.");
+
+    let svg = convert.open(Path::new(path))
         .expect("Failed to read example svg");
     let image = svg.render()
         .expect("Failed to render");

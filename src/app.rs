@@ -11,6 +11,7 @@ use crate::resources::Resources;
 
 pub struct App {
     pub ffmpeg: Ffmpeg,
+    pub magick: svg_to_image::MagickConvert,
     pub tempdir: TempDir,
     pub sink: SyncSink,
     pub explode: Arc<dyn ExplodePdf>,
@@ -37,6 +38,7 @@ impl App {
         App {
             ffmpeg: res.ffmpeg,
             tempdir: res.tempdir,
+            magick: res.magick,
             sink: res.dir_as_sink.into(),
             explode: res.explode.into(),
             limits: Limits::default(),

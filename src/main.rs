@@ -25,6 +25,8 @@ fn main() -> Result<(), FatalError> {
         writeln!(cfg.stderr, " version: {}", resources.ffmpeg.version.version)?;
         writeln!(cfg.stderr, "Using temporary directory")?;
         writeln!(cfg.stderr, " path: {}", resources.tempdir.path().display())?;
+        writeln!(cfg.stderr, "Using ImageMagick")?;
+        writeln!(cfg.stderr, " magick: {}", resources.magick.path().display())?;
         resources.explode.verbose_describe(&mut cfg.stderr)?;
 
         writeln!(cfg.stderr, "There is `auditable` information")?;
