@@ -40,20 +40,27 @@ impl Svg {
 
     pub fn render(&self) -> Result<image::DynamicImage, Error> {
         // choose renderer.
-        if cfg!(pathfinder) {
+        if cfg!(render_pathfinder) {
             let size = self.tree.svg_node().size.to_screen_size();
             let width = size.width();
             let height = size.height();
 
             let mut image = image::RgbaImage::new(width, height);
             self.render_pathfinder_gl(&mut image)?;
-            self.render_skia(&mut image)?;
 
             return Ok(image::DynamicImage::ImageRgba8(image));
-        }
+        } else if cfg!(render_resvg) {
+            let size = self.tree.svg_node().size.to_screen_size();
+            let width = size.width();
+            let height = size.height();
 
-        #[cfg(not(pathfinder))]
-        self.render_convert()
+            let mut image = image::RgbaImage::new(width, height);
+            self.render_resvg(&mut image)?;
+
+            return Ok(image::DynamicImage::ImageRgba8(image));
+        } else {
+            self.render_convert()
+        }
     }
 
     fn render_convert(&self) -> Result<image::DynamicImage, Error> {
@@ -125,8 +132,16 @@ impl Svg {
         Ok(())
     }
 
+    #[cfg(not(render_resvg))]
+    fn render_resvg(&self, image: &mut image::RgbaImage) -> Result<(), Error> {
+        Err(Error {
+            kind: ErrorKind::UnsupportedRenderMethod("resvg"),
+        })
+    }
+
     // FIXME(2021-Jan): this fails to render the text.
-    fn render_skia(&self, image: &mut image::RgbaImage) -> Result<(), Error> {
+    #[cfg(render_resvg)]
+    fn render_resvg(&self, image: &mut image::RgbaImage) -> Result<(), Error> {
         let width = image.width();
         let height = image.height();
 

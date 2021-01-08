@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=Vid From Pdf
+StartupWMClass=Vid From Pdf
+Comment=Turn a Pdf into a commented video
+Exec=/opt/vid-from-pdf/vid-from-pdf --web
