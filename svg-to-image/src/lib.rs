@@ -1,5 +1,5 @@
 //! A glue crate for rendering an svg to a pixmap that can be saved.
-use std::{io, path::Path};
+use std::{io, fmt, path::Path};
 
 pub struct Svg {
     pub tree: usvg::Tree,
@@ -314,6 +314,43 @@ impl From<subprocess::PopenError> for Error {
     fn from(err: subprocess::PopenError) -> Self {
         Error {
             kind: ErrorKind::Popen(err),
+        }
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.kind {
+            ErrorKind::Io(err) => {
+                write!(f, "I/O error: {}", err)
+            }
+            ErrorKind::Usvg(err) => write!(f, "SVG slide is invalid: {}", err),
+            ErrorKind::Image(err) => write!(f, "Image could not be processed: {}", err),
+            // TODO: we're missing context here..
+            ErrorKind::Popen(err) => write!(f, "Call to subprocess failed: {}", err),
+            ErrorKind::Convert { status, stderr } => write!(
+                f,
+                "Call to `convert` tool failed:\nexit status:{:?}\nstderr\n{}",
+                status,
+                String::from_utf8_lossy(stderr),
+            ),
+            ErrorKind::RequiredTool { tool, information: None } => write!(
+                f, 
+                "Required tool for SVG conversion not found: {}", 
+                tool,
+            ),
+            ErrorKind::RequiredTool { tool, information: Some(info) } => write!(
+                f, 
+                "Required tool for SVG conversion not found: {}\n{}", 
+                tool,
+                info,
+            ),
+            ErrorKind::Resvg => {
+                write!(f, "Unspecified error in `resvg` library")
+            },
+            ErrorKind::UnsupportedRenderMethod(method) => {
+                write!(f, "The chosen SVG rendering method `{}` is not supported", method)
+            }
         }
     }
 }

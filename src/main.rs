@@ -14,7 +14,14 @@ use std::io::Write as _;
 
 static COMPRESSED_DEPENDENCY_LIST: &[u8] = auditable::inject_dependency_list!();
 
-fn main() -> Result<(), FatalError> {
+fn main() {
+    if let Err(err) = run() {
+        eprintln!("{:?}", err);
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<(), FatalError> {
     let mut cfg = resources::Configuration::from_env()?;
     let resources = resources::Resources::force(&cfg)?;
     if cfg.verbose {
@@ -95,7 +102,7 @@ impl fmt::Debug for FatalError {
             FatalError::Io(io) => write!(f, "I/O error: {}", io),
             FatalError::Corrupt(err) => write!(f, "Corrupt data structure: {:?}", err),
             FatalError::Image(err) => write!(f, "Bad image data: {:?}", err),
-            FatalError::Svg(err) => write!(f, "Could not convert svg to pixmap: {:?}", err),
+            FatalError::Svg(err) => write!(f, "Could not convert svg to pixmap:\n{}", err),
             FatalError::UnrecognizedInputSlide => write!(f, "An input slide was in unrecognized image format after conversion"),
         }
     }
