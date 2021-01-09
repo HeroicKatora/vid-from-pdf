@@ -4,9 +4,11 @@ Release:        1%{?dist}
 Summary:        Create a simple video from PDF slides and audio
 License:        AGPL-3.0-or-later
 URL:            https://github.com/HeroicKatora/vid-from-pdf
-Source:         vid-from-pdf-v1.0.0-beta.tar.gz
+Source:         vid-from-pdf-v1.0.0-beta.1.tar.gz
 
 BuildRequires:  cargo
+
+%define internal_version 1.0.0-beta.1
 
 %description
 Create a simple video from PDF slides and audio
@@ -15,10 +17,10 @@ This is not a full-features video editor, it instead focusses on simplicity and
 provides a wrapper around ffmpeg and mupdf.
 
 %prep
-%setup -n "vid-from-pdf-1.0.0-beta"
+%setup -n "%{name}-%{internal_version}"
 
 %build
-cd $RPM_BUILD_DIR/%{name}-%{version}-beta
+cd $RPM_BUILD_DIR/%{name}-%{internal_version}
 cargo build --release --target x86_64-unknown-linux-musl
 
 %install
