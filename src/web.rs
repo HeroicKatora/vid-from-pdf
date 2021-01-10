@@ -11,7 +11,7 @@ use tide::sessions::{MemoryStore, SessionMiddleware};
 
 use crate::{FatalError, sink};
 use crate::app::App;
-use crate::project::{Project, Visual};
+use crate::project::{Audio, Project, Visual};
 
 pub fn serve(app: App) -> Result<(), FatalError> {
 
@@ -91,7 +91,7 @@ fn serialize_project(project: &Project) -> impl Serialize {
     }
 
     fn project_asset_url(path: &path::Path) -> String {
-        // TODO: review. Or turn into static invariant.
+        // FIXME: review. Or turn into static invariant.
         let name = path.file_name().unwrap();
         let name = std::path::Path::new(name);
         format!("/project/asset/{}", name.display())
@@ -111,8 +111,9 @@ fn serialize_project(project: &Project) -> impl Serialize {
                 }
             },
             audio_url: match slide.audio {
-                None => None,
-                Some(ref src) => Some(project_asset_url(src)),
+                // FIXME: differentiate between those two?
+                Audio::Silent | Audio::Skip => None,
+                Audio::File { ref src } => Some(project_asset_url(src)),
             },
         }
     }

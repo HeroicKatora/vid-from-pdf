@@ -28,7 +28,7 @@ pub struct Meta {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Slide {
     pub visual: Visual,
-    pub audio: Option<PathBuf>,
+    pub audio: Audio,
     /// The visual, converted to PNG.
     pub png: Option<PathBuf>,
     /// The visual, converted to SVG.
@@ -50,6 +50,18 @@ pub enum Visual {
     // TODO: replacement image?
     // TODO: or continue last frame?
     // TODO: movies? It would be 'free'.
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Audio {
+    /// Skip this slide.
+    Skip,
+    /// Use audio from a file.
+    File {
+        src: PathBuf,
+    },
+    /// Use a silent replacement audio, show the frame.
+    Silent,
 }
 
 impl Project {
@@ -120,8 +132,8 @@ impl Project {
     }
 
     pub fn import_audio(&mut self, idx: usize, file: &mut impl Source) -> Result<(), FatalError> {
-        let path = self.dir.store_to_file(file.as_buf_read())?;
-        self.meta.slides[idx].audio = Some(path);
+        let src = self.dir.store_to_file(file.as_buf_read())?;
+        self.meta.slides[idx].audio = Audio::File { src };
         Ok(())
     }
 
@@ -130,14 +142,15 @@ impl Project {
         let mut assembly = Assembly::new(&mut self.dir)?;
 
         for slide in &mut self.meta.slides {
-            let visual = slide.render_visual(&mut self.dir, app)?;
             let audio = match &slide.audio {
-                None => {
+                Audio::Skip => continue,
+                Audio::File { src } => FileSource::new_from_existing(src.clone())?,
+                Audio::Silent => {
                     let path = self.meta.replacement.silent_audio(&mut self.dir, app)?;
                     FileSource::new_from_existing(path.clone())?
                 },
-                Some(path) => FileSource::new_from_existing(path.clone())?,
             };
+            let visual = slide.render_visual(&mut self.dir, app)?;
             assembly.add_linked(&app.ffmpeg, &visual, &audio, &mut self.dir)?;
         }
 
@@ -189,7 +202,7 @@ impl Project {
         for (idx, src) in self.dir.imported().enumerate() {
             self.meta.slides.push(Slide {
                 visual: Visual::Slide { src, idx, },
-                audio: None,
+                audio: Audio::Skip,
                 png: None,
                 svg: None,
             })
@@ -264,5 +277,11 @@ impl Replacement {
         let unique = sink.unique_path()?;
         image.save_with_format(&unique.path, image::ImageFormat::Png)?;
         Ok(unique.path)
+    }
+}
+
+impl Default for Audio {
+    fn default() -> Self {
+        Audio::Skip
     }
 }

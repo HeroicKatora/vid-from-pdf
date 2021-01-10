@@ -11,7 +11,7 @@ use tui::backend::CrosstermBackend;
 
 use crate::FatalError;
 use crate::app::App;
-use crate::project::Project;
+use crate::project::{Audio, Project};
 use crate::sink::FileSource;
 
 pub fn tui(app: App) -> Result<(), FatalError> {
@@ -199,8 +199,9 @@ impl Tui {
                          },
                          if idx == self.slide_idx { "*" } else { " " },
                          match &slide.audio {
-                             None => String::from("Not yet selected"),
-                             Some(src) => src.display().to_string(),
+                             Audio::Silent => String::from("Frame is silent"),
+                             Audio::Skip => String::from("Frame is skipped, select audio to enable"),
+                             Audio::File { src } => src.display().to_string(),
                          }
                     ));
                 frame.render_widget(par, item_rect);
