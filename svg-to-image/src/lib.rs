@@ -1,8 +1,10 @@
 //! A glue crate for rendering an svg to a pixmap that can be saved.
-use std::{io, fmt, path::Path};
+use std::{io, fs, fmt, path::Path};
 
 pub struct Svg {
-    pub tree: usvg::Tree,
+    /// The original data of the svg.
+    data: Option<Vec<u8>>,
+    tree: usvg::Tree,
     magick: MagickConvert,
 }
 
@@ -62,12 +64,19 @@ impl Svg {
     }
 
     fn render_convert(&self, magick: &MagickConvert) -> Result<image::DynamicImage, Error> {
-        let tree = self.tree.to_string(Default::default());
+        let tree_data = match &self.data {
+            Some(data) => data.clone(),
+            None => {
+                self.tree.to_string(Default::default()).into_bytes()
+            }
+        };
+
         let exec = subprocess::Exec::cmd(&magick.magick)
             .arg("convert")
+            .arg("-verbose")
             .arg("svg:-")
             .arg("ppm:-")
-            .stdin(tree.into_bytes())
+            .stdin(tree_data)
             .stdout(subprocess::Redirection::Pipe)
             .stderr(subprocess::Redirection::Pipe)
             .capture()?;
@@ -213,8 +222,10 @@ impl MagickConvert {
             panic!("failed to find system fonts for loading");
         }
 
-        let tree = usvg::Tree::from_file(path, &options)?;
+        let data = fs::read(path)?;
+        let tree = usvg::Tree::from_data(&data, &options)?;
         Ok(Svg {
+            data: Some(data),
             tree,
             magick: self.clone(),
         })
@@ -223,6 +234,7 @@ impl MagickConvert {
     /// Prepare converting a particular SVG tree.
     pub fn with_tree(&self, tree: usvg::Tree) -> Svg {
         Svg {
+            data: None,
             tree,
             magick: self.clone(),
         }
