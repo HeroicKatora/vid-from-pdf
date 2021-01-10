@@ -221,6 +221,8 @@ impl Slide {
                 let svg = app.magick.open(path)?;
                 let image = svg.render()?;
                 let unique = sink.unique_path()?;
+                let image = image.to_rgba8();
+
                 image.save_with_format(&unique.path, image::ImageFormat::Png)?;
                 self.png = Some(unique.path);
             },
