@@ -1,7 +1,7 @@
 Name:           vid-from-pdf
 Version:        1.0.0
-%define         oversion 1.0.0-beta.2
-Release:        3%{?dist}
+%define         oversion 1.0.0-beta.3
+Release:        4%{?dist}
 Summary:        Create a simple video from PDF slides and audio
 License:        AGPL-3.0-or-later
 URL:            https://github.com/HeroicKatora/vid-from-pdf
