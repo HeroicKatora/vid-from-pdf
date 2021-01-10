@@ -1,4 +1,4 @@
-use std::{fs, io, mem, path::Path, path::PathBuf};
+use std::{fs, io, mem, path::Path, path::PathBuf, process};
 use tokio::runtime;
 use tokio::stream::StreamExt;
 use crossterm::{
@@ -11,7 +11,7 @@ use tui::backend::CrosstermBackend;
 
 use crate::FatalError;
 use crate::app::App;
-use crate::project::{Audio, Project};
+use crate::project::{Audio, Project, Slide, Visual};
 use crate::sink::FileSource;
 
 pub fn tui(app: App) -> Result<(), FatalError> {
@@ -156,8 +156,18 @@ async fn drive_tui(
             }) => {
                 if let Some(ref outfile) = tui.outfile {
                     fs::copy(outfile, "/tmp/output.mp4")?;
+                    tui.status = Some("Written existing video to /tmp/output.mp4".into());
                 } else {
                     tui.compute_video(&mut term, app)?;
+                }
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('o'),
+                modifiers: KeyModifiers::NONE,
+            }) => {
+                // Only when we're not in the process of selecting, to avoid confusion.
+                if tui.select.is_none() {
+                    tui.preview_slide()?;
                 }
             }
             _ => {}
@@ -390,6 +400,41 @@ impl Tui {
             }
             Ok(_) => Some(selected_file),
         }
+    }
+
+    fn preview_slide(&mut self)
+        -> Result<(), FatalError>
+    {
+        let project = match &mut self.project {
+            Some(project) => project,
+            None => {
+                self.status = Some("No project to open a slide from".into());
+                return Ok(());
+            },
+        };
+
+        project.thumbnail()?;
+
+        let path = match project.meta.slides.get(self.slide_idx) {
+            Some(Slide { svg: Some(svg), .. }) => svg,
+            Some(Slide { png: Some(png), .. }) => png,
+            Some(Slide { visual: Visual::Slide { src, .. }, .. }) => src,
+            None => {
+                self.status = Some("Selected slide does not have any visual".into());
+                return Ok(());
+            },
+        };
+
+        let mut viewer = process::Command::new("xdg-open")
+            .arg(path)
+            .stdin(process::Stdio::null())
+            .stdout(process::Stdio::null())
+            .stderr(process::Stdio::null())
+            .spawn()?;
+
+        viewer.wait()?;
+
+        Ok(())
     }
 }
 
