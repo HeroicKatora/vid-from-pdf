@@ -1,14 +1,19 @@
 Name:           vid-from-pdf
 Version:        1.0.0
-Release:        1%{?dist}
+%define         oversion 1.0.0-beta.2
+Release:        3%{?dist}
 Summary:        Create a simple video from PDF slides and audio
 License:        AGPL-3.0-or-later
 URL:            https://github.com/HeroicKatora/vid-from-pdf
-Source:         vid-from-pdf-v1.0.0-beta.1.tar.gz
+# Note: manually download into rpmbuild/SOURCES with
+# wget --content-disposition https://github.com/HeroicKatora/vid-from-pdf/archive/%{oversion}.tar.gz
+Source:         vid-from-pdf-%{oversion}.tar.gz
 
+# To build on a different host system without any requirements:
+# rpmbuild -bb --nodeps
+# The choice of cargo should not affect the usability of the end result and
+# there are no dynamically linked dependencies after this build process.
 BuildRequires:  cargo
-
-%define internal_version 1.0.0-beta.1
 
 %description
 Create a simple video from PDF slides and audio
@@ -17,10 +22,10 @@ This is not a full-features video editor, it instead focusses on simplicity and
 provides a wrapper around ffmpeg and mupdf.
 
 %prep
-%setup -n "%{name}-%{internal_version}"
+%setup -n "%{name}-%{oversion}"
 
 %build
-cd $RPM_BUILD_DIR/%{name}-%{internal_version}
+cd $RPM_BUILD_DIR/%{name}-%{oversion}
 cargo build --release --target x86_64-unknown-linux-musl
 
 %install
