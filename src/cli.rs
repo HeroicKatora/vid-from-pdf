@@ -1,6 +1,6 @@
 use std::{fs, io, mem, path::Path, path::PathBuf, process};
 use tokio::runtime;
-use tokio::stream::StreamExt;
+use tokio_stream::StreamExt;
 use crossterm::{
     ErrorKind,
     terminal::{disable_raw_mode, enable_raw_mode},
