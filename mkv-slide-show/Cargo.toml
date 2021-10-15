@@ -1,0 +1,8 @@
+[package]
+name = "mkv-slide-show"
+version = "0.1.0"
+edition = "2018"
+description = "Convert images and durations into a slide show video"
+
+[dependencies.webm-iterable]
+version = "0.3"

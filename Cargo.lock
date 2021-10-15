@@ -960,6 +960,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "ebml-iterable"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f50c1aef18979b53044d9385c6afebfa380f309388752e7a7db344df5b899e8"
+dependencies = [
+ "ebml-iterable-specification",
+ "ebml-iterable-specification-derive",
+]
+
+[[package]]
+name = "ebml-iterable-specification"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76c5012a5d72c56bac1aeb8d802a52bc3be09b46edbd767c41f538a98e61971c"
+
+[[package]]
+name = "ebml-iterable-specification-derive"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "614df9701626c0c0cf741eef1058d82a8ec72d2c23dc27ac1ebf38d3434acc4d"
+dependencies = [
+ "ebml-iterable-specification",
+ "proc-macro2 1.0.24",
+ "quote 1.0.7",
+ "syn 1.0.48",
+]
+
+[[package]]
 name = "either"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1784,6 +1812,13 @@ checksum = "07b88fb9795d4d36d62a012dfbf49a8f5cf12751f36d31a9dbe66d528e58979e"
 dependencies = [
  "socket2",
  "winapi",
+]
+
+[[package]]
+name = "mkv-slide-show"
+version = "0.1.0"
+dependencies = [
+ "webm-iterable",
 ]
 
 [[package]]
@@ -3558,6 +3593,15 @@ checksum = "4bf6ef87ad7ae8008e15a355ce696bed26012b7caa21605188cfd8214ab51e2d"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "webm-iterable"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c9c773ff9e3e25834acba6cbc62bc072578f1781aa914e1405053f0e5f98009"
+dependencies = [
+ "ebml-iterable",
 ]
 
 [[package]]

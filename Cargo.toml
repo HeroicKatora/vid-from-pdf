@@ -60,5 +60,6 @@ debug = false
 
 [workspace]
 members = [
-  "svg-to-image"
+  "mkv-slide-show",
+  "svg-to-image",
 ]
