@@ -1016,6 +1016,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "escargot"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44bb3f795fe1b9d34f089c7fab034c2b757998d65361d95ef008045b57665262"
+dependencies = [
+ "log 0.4.11",
+ "once_cell",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "event-listener"
 version = "2.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3462,30 +3474,39 @@ dependencies = [
 ]
 
 [[package]]
-name = "vid-from-pdf"
-version = "1.0.0-beta.3"
+name = "vfp-core"
+version = "0.0.0"
 dependencies = [
  "auditable",
  "auditable-build",
  "base64 0.13.0",
  "crossterm",
  "ctrlc",
+ "escargot",
  "image",
  "index-ext",
  "libloading",
  "mupdf",
  "rand 0.7.3",
- "rust-embed",
  "serde",
  "serde_json",
  "svg-to-image",
  "tempfile",
- "tide",
  "tokio",
  "tokio-stream",
  "tui",
  "versions",
  "which 4.0.2",
+]
+
+[[package]]
+name = "vid-from-pdf"
+version = "0.0.0"
+dependencies = [
+ "auditable-build",
+ "image",
+ "rust-embed",
+ "tide",
 ]
 
 [[package]]

@@ -7,7 +7,6 @@ mod resources;
 mod sink;
 #[cfg(test)]
 mod test;
-mod web;
 
 use std::fmt;
 use std::io::Write as _;
@@ -56,7 +55,7 @@ fn run() -> Result<(), FatalError> {
         cli::tui(app)?;
         writeln!(cfg.stdout, "")?;
     } else {
-        web::serve(app)?;
+        todo!("Local job server mode")
     }
 
     Ok(())
