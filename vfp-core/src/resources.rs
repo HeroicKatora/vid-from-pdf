@@ -43,7 +43,7 @@ impl Resources {
         let ffmpeg = Ffmpeg::new();
         let magick = require_tool(MagickConvert::MAGICK);
         let tempdir = cfg.new_tempdir();
-        let explode = ExplodePdf::new();
+        let explode = <dyn ExplodePdf>::new();
 
         let mut report = cfg.error_reporter();
         if let Err(err) = &ffmpeg {

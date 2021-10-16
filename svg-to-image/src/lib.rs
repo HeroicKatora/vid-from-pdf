@@ -3,8 +3,7 @@ use std::{io, fs, fmt, path::Path};
 
 pub struct Svg {
     /// The original data of the svg.
-    data: Option<Vec<u8>>,
-    tree: usvg::Tree,
+    data: Vec<u8>,
     magick: MagickConvert,
 }
 
@@ -21,7 +20,6 @@ pub struct MagickConvert {
 #[derive(Debug)]
 enum ErrorKind {
     Io(io::Error),
-    Usvg(usvg::Error),
     Image(image::ImageError),
     Popen(subprocess::PopenError),
     Convert {
@@ -32,45 +30,15 @@ enum ErrorKind {
         tool: &'static str,
         information: Option<Box<str>>,
     },
-    // No further information.
-    Resvg,
-    UnsupportedRenderMethod(&'static str),
 }
 
 impl Svg {
     pub fn render(&self) -> Result<image::DynamicImage, Error> {
-        // choose renderer.
-        if cfg!(render_pathfinder) {
-            let size = self.tree.svg_node().size.to_screen_size();
-            let width = size.width();
-            let height = size.height();
-
-            let mut image = image::RgbaImage::new(width, height);
-            self.render_pathfinder_gl(&mut image)?;
-
-            return Ok(image::DynamicImage::ImageRgba8(image));
-        } else if cfg!(render_resvg) {
-            let size = self.tree.svg_node().size.to_screen_size();
-            let width = size.width();
-            let height = size.height();
-
-            let mut image = image::RgbaImage::new(width, height);
-            self.render_resvg(&mut image)?;
-
-            return Ok(image::DynamicImage::ImageRgba8(image));
-        } else {
-            self.render_convert(&self.magick)
-        }
+        self.render_convert(&self.magick)
     }
 
     fn render_convert(&self, magick: &MagickConvert) -> Result<image::DynamicImage, Error> {
-        let tree_data = match &self.data {
-            Some(data) => data.clone(),
-            None => {
-                self.tree.to_string(Default::default()).into_bytes()
-            }
-        };
-
+        let tree_data = self.data.clone();
         let exec = subprocess::Exec::cmd(&magick.magick)
             .arg("convert")
             .arg("-verbose")
@@ -94,72 +62,6 @@ impl Svg {
         let image = image::io::Reader::with_format(image_data, image::ImageFormat::Pnm)
             .decode()?;
         Ok(image)
-    }
-
-    #[cfg(not(pathfinder))]
-    fn render_pathfinder_gl(&self, _: &mut image::RgbaImage) -> Result<(), Error> {
-        Err(Error {
-            kind: ErrorKind::UnsupportedRenderMethod("pathfinder"),
-        })
-    }
-
-    #[cfg(pathfinder)]
-    fn render_pathfinder_gl(&self, image: &mut image::RgbaImage) -> Result<(), Error> {
-        let width = image.width();
-        let height = image.height();
-
-        gl::load_with(|s| glfw::Glfw.get_proc_address_raw(s));
-
-        let svg = {
-            let string = self.tree.to_string(Default::default());
-            let options = old_usvg::Options::default();
-            let tree = old_usvg::Tree::from_str(&string, &options).unwrap();
-            pathfinder_svg::BuiltSVG::from_tree(&tree);
-        };
-
-        let resources = pathfinder_resources::embedded::EmbeddedResourceLoader::new();
-
-        let gl = pathfinder_gl::GLDevice::new(
-            pathfinder_gl::GLVersion::GLES3,
-            0);
-
-        use pathfinder_gpu::Device;
-        let texture = gl.create_texture(
-            pathfinder_gpu::TextureFormat::RGBA8,
-            pathfinder_geometry::vector::Vector2I::new(width as i32, height as i32),
-        );
-
-        let framebuffer = gl.create_framebuffer(texture);
-
-        let renderer = pathfinder_renderer::gpu::renderer::Renderer::new(
-            gl,
-            &resources,
-            pathfinder_renderer::gpu::options::DestFramebuffer::Other(framebuffer),
-            Default::default());
-
-        Ok(())
-    }
-
-    #[cfg(not(render_resvg))]
-    fn render_resvg(&self, image: &mut image::RgbaImage) -> Result<(), Error> {
-        Err(Error {
-            kind: ErrorKind::UnsupportedRenderMethod("resvg"),
-        })
-    }
-
-    // FIXME(2021-Jan): this fails to render the text.
-    #[cfg(render_resvg)]
-    fn render_resvg(&self, image: &mut image::RgbaImage) -> Result<(), Error> {
-        let width = image.width();
-        let height = image.height();
-
-        let pixmap = tiny_skia::PixmapMut::from_bytes(image, width, height)
-            .expect("Correct size for buffer");
-
-        match resvg::render(&self.tree, usvg::FitTo::Original, pixmap) {
-            None => Err(Error::failed_to_render()),
-            Some(()) => Ok(()),
-        }
     }
 }
 
@@ -215,29 +117,11 @@ impl MagickConvert {
     }
 
     pub fn open(&self, path: &Path) -> Result<Svg, Error> {
-        let mut options = usvg::Options::default();
-        options.fontdb.load_system_fonts();
-
-        if options.fontdb.is_empty() {
-            panic!("failed to find system fonts for loading");
-        }
-
         let data = fs::read(path)?;
-        let tree = usvg::Tree::from_data(&data, &options)?;
         Ok(Svg {
-            data: Some(data),
-            tree,
+            data: data,
             magick: self.clone(),
         })
-    }
-
-    /// Prepare converting a particular SVG tree.
-    pub fn with_tree(&self, tree: usvg::Tree) -> Svg {
-        Svg {
-            data: None,
-            tree,
-            magick: self.clone(),
-        }
     }
 
     fn check_svg_read(st: &str) -> Option<bool> {
@@ -290,22 +174,6 @@ impl MagickConvert {
     }
 }
 
-impl Error {
-    fn failed_to_render() -> Self {
-        Error {
-            kind: ErrorKind::Resvg,
-        }
-    }
-}
-
-impl From<usvg::Error> for Error {
-    fn from(err: usvg::Error) -> Self {
-        Error {
-            kind: ErrorKind::Usvg(err),
-        }
-    }
-}
-
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Self {
         Error {
@@ -336,7 +204,6 @@ impl fmt::Display for Error {
             ErrorKind::Io(err) => {
                 write!(f, "I/O error: {}", err)
             }
-            ErrorKind::Usvg(err) => write!(f, "SVG slide is invalid: {}", err),
             ErrorKind::Image(err) => write!(f, "Image could not be processed: {}", err),
             // TODO: we're missing context here..
             ErrorKind::Popen(err) => write!(f, "Call to subprocess failed: {}", err),
@@ -357,12 +224,6 @@ impl fmt::Display for Error {
                 tool,
                 info,
             ),
-            ErrorKind::Resvg => {
-                write!(f, "Unspecified error in `resvg` library")
-            },
-            ErrorKind::UnsupportedRenderMethod(method) => {
-                write!(f, "The chosen SVG rendering method `{}` is not supported", method)
-            }
         }
     }
 }

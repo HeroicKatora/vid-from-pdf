@@ -58,5 +58,6 @@ fn build_binary(bin: &str) -> PathBuf {
 
 fn main() {
     auditable_build::collect_dependency_list();
-    let _ = build_binary("mkv-slide-show");
+    let mkv_slide_show = build_binary("mkv-slide-show");
+    print!("cargo:rustc-env=MKV_SLIDE_SHOW={}", mkv_slide_show.display());
 }
