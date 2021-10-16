@@ -1,8 +1,7 @@
 use std::collections::HashMap;
-mod paged_vec;
 
 use std::path::PathBuf;
-use self::paged_vec::PagedVec;
+use crate::paged_vec::PagedVec;
 
 pub struct Slide {
     /// The rendered frame images according to `Color` in slide show.

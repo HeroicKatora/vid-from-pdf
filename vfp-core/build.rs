@@ -1,4 +1,18 @@
-fn build_library() {
+use std::path::PathBuf;
+use escargot::format::{Message, WorkspaceMember};
+
+fn path_from_local_workspace(member: WorkspaceMember) -> String {
+    // Yeah, we do this by string parsing.
+    let to_parse = format!("{:?}", member);
+    let (_, path) = to_parse.split_once("file://")
+        .unwrap_or_else(|| {
+            panic!("expect to find a path spec in workspace member {:?}", member)
+        });
+    let path = path.split_once(")").map_or(path, |tup| tup.0);
+    path.to_owned()
+}
+
+fn build_binary(bin: &str) -> PathBuf {
     let tempdir = std::env::var("OUT_DIR")
         .unwrap();
     let manifest = std::env::var("CARGO_MANIFEST_DIR")
@@ -6,29 +20,43 @@ fn build_library() {
     let messages = escargot::CargoBuild::default()
         .current_release()
         .current_target()
-        .manifest_path(manifest)
-        .package("mkv-slide-show")
-        .bin("mkv-slide-show")
+        .manifest_path(manifest + "/../Cargo.toml")
+        .package(bin)
         .target_dir(tempdir)
         .exec()
         .unwrap();
 
+    //  Ensures there is no error finding messages.
     let messages: Vec<_> = messages
-        .filter_map(Result::ok)
+        .filter_map(|msg| match msg {
+            Ok(msg) => Some(msg),
+            Err(msg) => panic!("{:?}", msg),
+        })
         .collect();
 
-    let messages = messages
+    //  Get the artifact output message.
+    let mut messages = messages
         .iter()
         .filter_map(|msg| {
             match msg.decode() {
-                Ok(escargot::format::Message::CompilerArtifact(art)) => Some(art),
-                _ => None,
+                Ok(Message::CompilerArtifact(art)) => {
+                    let executable = art.executable?;
+                    let path = path_from_local_workspace(art.package_id);
+                    Some((executable, path))
+                },
+                Ok(other) => { eprintln!("{:?}", other); None },
+                _other => None,
             }
         });
 
+    let (executable, path) = messages.next()
+        .expect("to have built a binary target");
+
+    print!("cargo:rerun-if-changed={}", path);
+    executable.into_owned()
 }
 
 fn main() {
     auditable_build::collect_dependency_list();
-    build_library();
+    let _ = build_binary("mkv-slide-show");
 }
