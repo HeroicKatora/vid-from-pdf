@@ -26,7 +26,7 @@ fn main_with_stdio() -> Result<(), io::Error> {
         }
         Ok(paths) => {
             serde_json::to_writer(io::stdout(), &CallResult::Ok(paths))?;
-            process::exit(1);
+            process::exit(0);
         }
     }
 }
