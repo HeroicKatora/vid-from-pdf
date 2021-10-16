@@ -225,9 +225,13 @@ impl Slide {
         match &self.visual {
             Visual::Slide { src, .. } => {
                 let mut path = src.clone();
-                // usvg is picky about file endings. GEEEEEEEZ.
-                path.set_extension("svg");
-                fs::copy(src, &path)?;
+
+                if path.extension().and_then(|ext| ext.to_str()) != Some("svg") {
+                    // usvg is picky about file endings. GEEEEEEEZ.
+                    path.set_extension("svg");
+                    fs::copy(src, &path)?;
+                }
+
                 self.svg = Some(path);
                 let path = self.svg.as_ref().unwrap();
 

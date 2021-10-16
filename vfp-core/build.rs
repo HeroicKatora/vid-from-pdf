@@ -52,12 +52,14 @@ fn build_binary(bin: &str) -> PathBuf {
     let (executable, path) = messages.next()
         .expect("to have built a binary target");
 
-    print!("cargo:rerun-if-changed={}", path);
+    println!("cargo:rerun-if-changed={}", path);
     executable.into_owned()
 }
 
 fn main() {
     auditable_build::collect_dependency_list();
     let mkv_slide_show = build_binary("mkv-slide-show");
-    print!("cargo:rustc-env=MKV_SLIDE_SHOW={}", mkv_slide_show.display());
+    println!("cargo:rustc-env=VFP_MKV_SLIDE_SHOW={}", mkv_slide_show.display());
+    let mupdf_explode = build_binary("mupdf-explode");
+    println!("cargo:rustc-env=VFP_MUPDF_EXPLODE={}", mupdf_explode.display());
 }

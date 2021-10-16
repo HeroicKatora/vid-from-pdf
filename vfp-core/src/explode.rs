@@ -1,11 +1,11 @@
 /// Turn a pdf into multiple images of that each page.
-use std::{collections::BTreeMap, fmt, fs, io, process::Command};
-use image::{io::Reader as ImageReader, imageops};
-use which::CanonicalPath;
+use std::{io, path::PathBuf};
+
+use serde_json::{json, Value};
+use subprocess::{Exec, Redirection};
 
 use crate::FatalError;
 use crate::sink::{Sink, Source};
-use crate::resources::{RequiredToolError, require_tool};
 
 pub trait ExplodePdf: Send + Sync + 'static {
     /// Create all pages as files, import them into sink.
@@ -14,119 +14,74 @@ pub trait ExplodePdf: Send + Sync + 'static {
     fn verbose_describe(&self, into: &mut dyn io::Write) -> Result<(), FatalError>;
 }
 
-struct PdfToPpm {
-    exe: CanonicalPath,
-}
-
-struct MuPdf {}
-
-pub enum LoadPdfExploderError {
-    CantFindPdfToPpm(RequiredToolError),
-}
-
-impl ExplodePdf for PdfToPpm {
-    fn explode(&self, src: &mut dyn Source, sink: &mut Sink) -> Result<(), FatalError> {
-        PdfToPpm::explode(self, src, sink)?;
-        let paths = sink.imported().collect::<Vec<_>>();
-        for mut path in paths {
-            let image = ImageReader::open(&path)?
-                .with_guessed_format()?
-                .decode()?;
-            let image = image.resize(1920, 1080, imageops::FilterType::Lanczos3);
-            path.set_extension("ppm");
-            image.save(&path)?;
-            sink.import(path);
-        }
-        Ok(())
-    }
-
-    fn verbose_describe(&self, into: &mut dyn io::Write) -> Result<(), FatalError> {
-        writeln!(into, "Using pdftoppm to deconstruct pdf")?;
-        writeln!(into, " pdftoppm: {}", self.exe.display())?;
-        Ok(())
-    }
-}
-
-impl PdfToPpm {
-    fn new() -> Result<PdfToPpm, LoadPdfExploderError> {
-        let pdf_to_ppm = require_tool("pdftoppm")
-            .map_err(LoadPdfExploderError::CantFindPdfToPpm)?;
-        // TODO: version validation?
-        Ok(PdfToPpm {
-            exe: pdf_to_ppm,
-        })
-    }
-
-    fn explode(&self, src: &mut dyn Source, sink: &mut Sink) -> Result<(), FatalError> {
-        let path = match src.as_path() {
-            Some(path) => path.to_owned(),
-            None => sink.store_to_file(src.as_buf_read())?,
-        };
-
-        // TODO: we could fancily check that the paths do not collide.
-
-        Command::new(&self.exe)
-            .current_dir(sink.work_dir())
-            .args(&["-forcenum", "-rx", "600", "-ry", "600"])
-            .arg(path)
-            .arg("pages")
-            .status()
-            .expect("Converting pdf with `pdftoppm` failed");
-
-        let mut entries = BTreeMap::new();
-        for entry in fs::read_dir(sink.work_dir())? {
-            let name = entry?.file_name();
-            let name = match name.to_str() {
-                None => continue,
-                Some(name) => name,
-            };
-
-            let file = match name.strip_suffix(".ppm") {
-                Some(file) => file,
-                None => continue,
-            };
-
-            let num = match file.strip_prefix("pages-") {
-                Some(num) => num,
-                None => continue,
-            };
-
-            let num = match num.parse::<u32>() {
-                Err(_) => continue,
-                Ok(num) => num,
-            };
-
-            entries.insert(num, sink.work_dir().join(name));
-        }
-
-        for (_, page) in entries.range(..) {
-            sink.import(page.clone());
-        }
-
-        Ok(())
-    }
+struct MuPdf {
+    binary: PathBuf,
 }
 
 impl dyn ExplodePdf {
-    pub fn new() -> Result<Box<Self>, LoadPdfExploderError> {
+    pub fn new(sink: &mut Sink) -> Result<Box<Self>, FatalError> {
         // TODO: detect if ffmpeg was compiled with librsvg.
-        Ok(Box::new(MuPdf {}))
-    }
-}
-
-impl fmt::Display for LoadPdfExploderError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            LoadPdfExploderError::CantFindPdfToPpm(err) => {
-                write!(f, "{}", err)
-            }
-        }
+        let mupdf = MuPdf::new(sink)?;
+        Ok(Box::new(mupdf))
     }
 }
 
 impl MuPdf {
-    fn convert_document(&self, path: &str, sink: &mut Sink) -> Result<(), ()> {
-        todo!()
+    const FILE: &'static [u8] = include_bytes!(env!("VFP_MUPDF_EXPLODE"));
+
+    fn new(sink: &mut Sink) -> Result<Self, FatalError> {
+        let binary = sink.store_to_file(&mut {Self::FILE})?;
+        
+        if cfg!(unix) {
+            use std::fs;
+            use std::os::unix::fs::PermissionsExt;
+            let perms = fs::Permissions::from_mode(0o700);
+            fs::set_permissions(&binary, perms)?;
+        }
+
+        Ok(MuPdf {
+            binary,
+        })
+    }
+
+    fn convert_document(&self, path: &str, sink: &mut Sink) -> Result<(), FatalError> {
+        let tempdir = sink.unique_mkdir()?;
+        let input = json!({
+                "path": path,
+                "target_dir": &tempdir.path,
+            });
+        let input = serde_json::to_vec(&input)?;
+
+        let capture = Exec::cmd(&self.binary)
+            .stdin(input)
+            .stdout(Redirection::Pipe)
+            .capture()
+            .map_err(|_| {
+                FatalError::ConversionFailed
+            })?;
+
+        let output: Value = serde_json::from_slice(&capture.stdout)
+            .map_err(|err| {
+                eprintln!("Stdout: {:?}", capture.stdout_str());
+                eprintln!("Error: {:?}", err);
+                err
+            })?;
+
+        if let Some(_) = output.get("error") {
+            return Err(FatalError::ConversionFailed);
+        }
+
+        let outputs = output.get("ok")
+            .ok_or(FatalError::ConversionFailed)?
+            .as_array()
+            .ok_or(FatalError::ConversionFailed)?;
+
+        for item in outputs {
+            let path = item.as_str().ok_or(FatalError::ConversionFailed)?;
+            sink.import(PathBuf::from(path));
+        }
+
+        Ok(())
     }
 }
 
@@ -138,7 +93,7 @@ impl ExplodePdf for MuPdf {
                 io::ErrorKind::Other,
                 "Non-UTF8 path is not supported",
             ))),
-            Some(path) => self.convert_document(path, sink).map_err(fatal_pdf_page)
+            Some(path) => self.convert_document(path, sink),
         }
     }
 
@@ -146,11 +101,4 @@ impl ExplodePdf for MuPdf {
         writeln!(into, "Using `mupdf` to deconstruct pdf")?;
         Ok(())
     }
-}
-
-fn fatal_pdf_page(err: ()) -> FatalError {
-    FatalError::Io(io::Error::new(
-        io::ErrorKind::Other,
-        "Failed to convert"
-    ))
 }

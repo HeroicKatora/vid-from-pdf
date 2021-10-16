@@ -73,11 +73,19 @@ pub enum FatalError {
     /// This is a theoretical concern as everything is SVG which we try to render. However, just
     /// preparing for future ideas where this might be more dynamic.
     UnrecognizedInputSlide,
+    /// Converting pdf to slides failed.
+    ConversionFailed,
 }
 
 impl From<std::io::Error> for FatalError {
     fn from(err: std::io::Error) -> FatalError {
         FatalError::Io(err)
+    }
+}
+
+impl From<serde_json::Error> for FatalError {
+    fn from(err: serde_json::Error) -> FatalError {
+        FatalError::Corrupt(err)
     }
 }
 
@@ -103,6 +111,13 @@ impl fmt::Debug for FatalError {
             FatalError::Image(err) => write!(f, "Bad image data: {:?}", err),
             FatalError::Svg(err) => write!(f, "Could not convert svg to pixmap:\n{}", err),
             FatalError::UnrecognizedInputSlide => write!(f, "An input slide was in unrecognized image format after conversion"),
+            FatalError::ConversionFailed => write!(f, "Failed to communicate with slide program"),
         }
+    }
+}
+
+impl fmt::Display for FatalError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
     }
 }

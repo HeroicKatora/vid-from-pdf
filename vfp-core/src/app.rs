@@ -9,12 +9,18 @@ use crate::ffmpeg::Ffmpeg;
 use crate::sink::SyncSink;
 use crate::resources::Resources;
 
+/// All the state of dependencies, gathered from the OS.
 pub struct App {
+    /// The `ffmpeg` library / binary.
     pub ffmpeg: Ffmpeg,
     pub magick: svg_to_image::MagickConvert,
+    /// The temporary directory for our runtime state.
     pub tempdir: TempDir,
+    /// The container to collect files produced by us.
     pub sink: SyncSink,
+    /// The program used for 'exploding' PDFs, that is splitting them into images page-by-page.
     pub explode: Arc<dyn ExplodePdf>,
+    /// Runtime limits.
     pub limits: Limits,
 }
 

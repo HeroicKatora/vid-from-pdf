@@ -1,10 +1,10 @@
 use std::{fs, io, path};
 use crate::{app, project, resources, sink};
 
-const PDF: &'static str = concat!(env!("CARGO_MANIFEST_DIR"), "/test-data/test.pdf");
-const WAV0: &'static str = concat!(env!("CARGO_MANIFEST_DIR"), "/test-data/espeak-0.wav");
-const WAV1: &'static str = concat!(env!("CARGO_MANIFEST_DIR"), "/test-data/espeak-1.wav");
-const WAV2: &'static str = concat!(env!("CARGO_MANIFEST_DIR"), "/test-data/espeak-2.wav");
+const PDF: &'static str = concat!(env!("CARGO_MANIFEST_DIR"), "/../test-data/test.pdf");
+const WAV0: &'static str = concat!(env!("CARGO_MANIFEST_DIR"), "/../test-data/espeak-0.wav");
+const WAV1: &'static str = concat!(env!("CARGO_MANIFEST_DIR"), "/../test-data/espeak-1.wav");
+const WAV2: &'static str = concat!(env!("CARGO_MANIFEST_DIR"), "/../test-data/espeak-2.wav");
 
 #[test]
 fn assemble() {
@@ -33,8 +33,7 @@ fn assemble() {
         };
     }
 
-    project.explode(&app)
-        .expect("Exploding pdf failed");
+    project.explode(&app).expect("Exploding pdf failed");
     assert_eq!(project.meta.slides.len(), 3);
 
     for (idx, &wav) in [WAV0, WAV1, WAV2].iter().enumerate() {

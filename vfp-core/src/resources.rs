@@ -39,20 +39,19 @@ impl Resources {
     /// Load and inspect all required resources and optional resources and panic if it is not
     /// possible to arrive at a suitable configuration.
     pub fn force(cfg: &Configuration) -> Result<Self, FatalError> {
-        // First, try and load all parts. Then give a condensed message with all missing parts.
+        let tempdir = cfg.new_tempdir()?;
+        let mut sink = Sink::new(tempdir.path().to_owned())?;
+
+        // Then try and load all parts. Then give a condensed message with all missing parts.
         let ffmpeg = Ffmpeg::new();
         let magick = require_tool(MagickConvert::MAGICK);
-        let tempdir = cfg.new_tempdir();
-        let explode = <dyn ExplodePdf>::new();
+        let explode = <dyn ExplodePdf>::new(&mut sink);
 
         let mut report = cfg.error_reporter();
         if let Err(err) = &ffmpeg {
             report.eat_err(err);
         }
         if let Err(err) = &magick {
-            report.eat_err(err);
-        }
-        if let Err(err) = &tempdir {
             report.eat_err(err);
         }
         if let Err(err) = &explode {
@@ -62,8 +61,6 @@ impl Resources {
 
         let ffmpeg = ffmpeg.unwrap_or_else(|_| unreachable!());
         let magick = magick.unwrap_or_else(|_| unreachable!());
-        let tempdir = tempdir.unwrap_or_else(|_| unreachable!());
-        let sink = Sink::new(tempdir.path().to_owned())?;
         let explode = explode.unwrap_or_else(|_| unreachable!());
 
         Ok(Resources {
