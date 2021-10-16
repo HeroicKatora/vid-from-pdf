@@ -3,6 +3,12 @@ name = "mupdf-explode"
 version = "0.0.0"
 edition = "2018"
 description = "Turn a pdf into separate SVG images of pages"
+resolver = "2"
 
 [dependencies.mupdf]
 version = "0.2.0"
+[dependencies.serde]
+version = "1"
+features = ["derive"]
+[dependencies.serde_json]
+version = "1"

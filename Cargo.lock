@@ -1530,6 +1530,8 @@ name = "mupdf-explode"
 version = "0.0.0"
 dependencies = [
  "mupdf",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
