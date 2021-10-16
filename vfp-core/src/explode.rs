@@ -1,7 +1,6 @@
 /// Turn a pdf into multiple images of that each page.
 use std::{collections::BTreeMap, fmt, fs, io, process::Command};
 use image::{io::Reader as ImageReader, imageops};
-use mupdf::Document;
 use which::CanonicalPath;
 
 use crate::FatalError;
@@ -126,34 +125,8 @@ impl fmt::Display for LoadPdfExploderError {
 }
 
 impl MuPdf {
-    /// Rescale page and normalize placement without distorting.
-    fn normalize_page_matrix(&self, bounds: mupdf::Rect) -> mupdf::Matrix {
-        let (width, height) = (bounds.width(), bounds.height());
-        let origin = bounds.origin();
-
-        let mut matrix = mupdf::Matrix::IDENTITY;
-        let scale_w = 1920.0/width;
-        let scale_h = 1080.0/height;
-        // Scale to contain.
-        let scale = scale_w.min(scale_h);
-        matrix.pre_translate(-origin.x, -origin.y);
-        matrix.scale(scale, scale);
-
-        matrix
-    }
-
-    fn convert_document(&self, path: &str, sink: &mut Sink) -> Result<(), mupdf::Error> {
-        let document = Document::open(path)?;
-
-        for page in &document {
-            let page = page?;
-            let matrix = self.normalize_page_matrix(page.bounds()?);
-            let mut svg = io::Cursor::new(page.to_svg(&matrix)?);
-            let filepath = sink.store_to_file(&mut svg)?;
-            sink.import(filepath);
-        }
-
-        Ok(())
+    fn convert_document(&self, path: &str, sink: &mut Sink) -> Result<(), ()> {
+        todo!()
     }
 }
 
@@ -175,9 +148,9 @@ impl ExplodePdf for MuPdf {
     }
 }
 
-fn fatal_pdf_page(err: mupdf::Error) -> FatalError {
+fn fatal_pdf_page(err: ()) -> FatalError {
     FatalError::Io(io::Error::new(
         io::ErrorKind::Other,
-        err
+        "Failed to convert"
     ))
 }

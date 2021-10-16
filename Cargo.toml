@@ -7,5 +7,6 @@ members = [
   "vid-from-pdf",
   "vfp-core",
   "mkv-slide-show",
+  "mupdf-explode",
   "svg-to-image",
 ]

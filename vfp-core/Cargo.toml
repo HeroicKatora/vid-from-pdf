@@ -39,8 +39,6 @@ version = "0.23.12"
 default-features = false
 features = ["png", "pnm"]
 
-[dependencies.mupdf]
-version = "0.2.0"
 [dependencies.svg-to-image]
 path = "../svg-to-image"
 

@@ -1,0 +1,8 @@
+[package]
+name = "mupdf-explode"
+version = "0.0.0"
+edition = "2018"
+description = "Turn a pdf into separate SVG images of pages"
+
+[dependencies.mupdf]
+version = "0.2.0"
