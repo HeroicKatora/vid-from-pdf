@@ -4,5 +4,14 @@ version = "0.0.0"
 edition = "2018"
 description = "Convert images and durations into a slide show video"
 
+[dependencies.serde]
+version = "1"
+features = ["derive"]
+[dependencies.serde_json]
+version = "1"
 [dependencies.webm-iterable]
 version = "0.3"
+
+[dev-dependencies]
+assert_cmd = "2"
+tempfile = "3.2"

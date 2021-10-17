@@ -10,3 +10,4 @@ members = [
   "mupdf-explode",
   "svg-to-image",
 ]
+resolver = "2"
