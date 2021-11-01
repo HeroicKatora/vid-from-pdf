@@ -9,6 +9,12 @@ use webm_iterable::{
     matroska_spec::MatroskaSpec,
 };
 
+use image::{
+    io::Reader as ImageReader,
+    ImageError,
+    GenericImageView,
+};
+
 pub enum Color {
     Srgb,
 }
@@ -31,6 +37,12 @@ pub struct Encoder<'slides> {
     video: VideoTrack,
     progress: Progress,
     vec: PagedVec,
+    state: EncoderState,
+}
+
+#[derive(Default)]
+struct EncoderState {
+    passed_time: f32,
 }
 
 /// Internal state keeping.
@@ -41,7 +53,16 @@ enum Progress {
 }
 
 #[derive(Debug)]
-pub struct Error;
+pub struct Error {
+    inner: ErrorKind,
+}
+
+#[derive(Debug)]
+pub enum ErrorKind {
+    Image(ImageError),
+    MismatchingDimensions,
+    EmptySequence,
+}
 
 /// The 'interface' of how we chose to encode audio.
 ///
@@ -62,6 +83,12 @@ struct VideoTrack {
 /// See mandatory and optional fields:
 /// <https://www.matroska.org/technical/elements.html>
 impl<'slides> Encoder<'slides> {
+    const TIMESCALE: u32 = 1_000_000;
+    const APP_NAME: &'static str = "VFP-Core-1.0.0";
+
+    const TRACK_VIDEO: u64 = 0;
+    // const TRACK_AUDIO: u64 = 1;
+
     pub fn new(show: &SlideShow<'slides>, vec: PagedVec) -> Self {
         let audio = AudioTrack {
         };
@@ -77,6 +104,7 @@ impl<'slides> Encoder<'slides> {
             video,
             progress: Progress::Initial,
             vec,
+            state: EncoderState::default(),
         }
     }
 
@@ -90,7 +118,6 @@ impl<'slides> Encoder<'slides> {
                 self.encode_info();
                 self.encode_tracks();
                 self.encode_chapters();
-                self.encode_cluster_head();
                 self.progress = Progress::BeforeFrame(0);
             },
             Progress::BeforeFrame(frame) => {
@@ -99,9 +126,12 @@ impl<'slides> Encoder<'slides> {
                     Err(other) => return Ok(Err(other)),
                 }
 
-                if frame == self.slides.len() {
+                let next_frame = frame + 1;
+                if next_frame == self.slides.len() {
                     self.encode_cluster_end();
                     self.progress = Progress::Done;
+                } else {
+                    self.progress = Progress::BeforeFrame(next_frame);
                 }
             }
         }
@@ -135,11 +165,11 @@ impl<'slides> Encoder<'slides> {
         let _ = self.writer().write(
             &MatroskaSpec::Info(Master::Start));
         let _ = self.writer().write(
-            &MatroskaSpec::TimecodeScale(1_000_000));
+            &MatroskaSpec::TimecodeScale(Self::TIMESCALE.into()));
         let _ = self.writer().write(
-            &MatroskaSpec::MuxingApp("VFP-Core-1.0.0".into()));
+            &MatroskaSpec::MuxingApp(Self::APP_NAME.into()));
         let _ = self.writer().write(
-            &MatroskaSpec::WritingApp("VFP-Core-1.0.0".into()));
+            &MatroskaSpec::WritingApp(Self::APP_NAME.into()));
         let _ = self.writer().write(
             &MatroskaSpec::Info(Master::End));
     }
@@ -152,7 +182,7 @@ impl<'slides> Encoder<'slides> {
         let _ = self.writer().write(
             &MatroskaSpec::TrackEntry(Master::Start));
         let _ = self.writer().write(
-            &MatroskaSpec::TrackNumber(0));
+            &MatroskaSpec::TrackNumber(Self::TRACK_VIDEO));
         let uid = self.mk_track_uid();
         let _ = self.writer().write(
             &MatroskaSpec::TrackUid(uid));
@@ -188,14 +218,7 @@ impl<'slides> Encoder<'slides> {
         // FIXME: let's not worry about it for now.
     }
 
-    fn encode_cluster_head(&mut self) {
-        let _ = self.writer().write(
-            &MatroskaSpec::Cluster(Master::Start));
-    }
-
     fn encode_cluster_end(&mut self) {
-        let _ = self.writer().write(
-            &MatroskaSpec::Cluster(Master::End));
         let _ = self.writer().write(
             &MatroskaSpec::Segment(Master::End));
     }
@@ -207,8 +230,50 @@ impl<'slides> Encoder<'slides> {
         -> Result<Result<(), Error>, io::Error>
     {
         let ref frame = self.slides[idx];
+        let image = ImageReader::open(&frame.image)?;
+        let image = match image.decode() {
+            Err(ImageError::IoError(io)) => return Err(io),
+            // FIXME: return error data?
+            Err(err) => return Ok(Err(err.into())),
+            Ok(image) => image,
+        };
+
+        if image.dimensions() != (self.video.width, self.video.height) {
+            return Ok(Err(ErrorKind::MismatchingDimensions.into()));
+        }
+
+        // The data, note that we encode the timestamp in the cluster.
+        let data = self.encode_frame_block(0u8, 0i16, image);
+
+        let _ = self.writer().write(
+            &MatroskaSpec::Cluster(Master::Start));
+        let ts = self.passed_time_as_timecode();
+        let _ = self.writer().write(
+            &MatroskaSpec::Timecode(ts));
+        let _ = self.writer().write(
+            &MatroskaSpec::Position(idx as u64));
+        let _ = self.writer().write(
+            &MatroskaSpec::SimpleBlock(data));
+        let _ = self.writer().write(
+            &MatroskaSpec::Cluster(Master::End));
+
+        self.state.passed_time += frame.seconds;
 
         Ok(Ok(()))
+    }
+
+    fn encode_frame_block(&self, num: u8, ts: i16, frame: image::DynamicImage)
+        -> Vec<u8>
+    {
+        let [ts0, ts1] = ts.to_be_bytes();
+        let mut vec = vec![num, ts0, ts1, 0x00];
+        vec.extend_from_slice(frame.as_bytes());
+        vec
+    }
+
+    fn passed_time_as_timecode(&self) -> u64 {
+        let ts = f64::from(self.state.passed_time) * f64::from(Self::TIMESCALE);
+        ts.round() as u64
     }
 
     fn writer(&mut self) -> WebmWriter<&'_ mut dyn io::Write> {
@@ -248,5 +313,17 @@ impl VideoTrack {
         // FIXME: should write Color::start etc.
         let _ = writer.write(
             &MatroskaSpec::Video(Master::End));
+    }
+}
+
+impl From<ErrorKind> for Error {
+    fn from(inner: ErrorKind) -> Self {
+        Error { inner }
+    }
+}
+
+impl From<ImageError> for Error {
+    fn from(err: ImageError) -> Self {
+        Error { inner: ErrorKind::Image(err) }
     }
 }

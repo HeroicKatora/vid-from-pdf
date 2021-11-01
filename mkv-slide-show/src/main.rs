@@ -3,8 +3,10 @@ mod missing_specs;
 mod paged_vec;
 
 use std::{collections::HashMap, io, io::Write, fs, path::PathBuf, process};
+use image::{io::Reader as ImageReader, ImageError};
 use serde::{Deserialize, Serialize};
-use self::encoder::{Encoder, Error, SlideShow};
+
+use self::encoder::{Encoder, Error, ErrorKind, SlideShow};
 use self::paged_vec::PagedVec;
 
 fn main() {
@@ -29,18 +31,18 @@ fn main_with_stdio() -> Result<(), io::Error> {
             serde_json::to_writer(io::stdout(), &CallResult::Err(err))?;
             process::exit(1);
         }
-        Ok(()) => {
-            serde_json::to_writer(io::stdout(), &CallResult::Ok)?;
+        Ok(file) => {
+            serde_json::to_writer(io::stdout(), &CallResult::Ok(file))?;
             process::exit(0);
         }
     }
 }
 
 fn assemble_file(config: Config)
-    -> Result<Result<(), Error>, io::Error>
+    -> Result<Result<FileResult, Error>, io::Error>
 {
     let slide_show = match config.slides.first() {
-        None => return Ok(Err(Error)),
+        None => return Ok(Err(ErrorKind::EmptySequence.into())),
         // Use the first slide to derive the metadata.
         Some(first_slide) => {
             let show = match basic_show_data(first_slide)? {
@@ -63,6 +65,7 @@ fn assemble_file(config: Config)
     let page = PagedVec::new(config.memory);
     let mut encoder = Encoder::new(&slide_show, page);
 
+    let mut length = 0;
     while !encoder.done() {
         match encoder.step()? {
             Ok(()) => {},
@@ -72,21 +75,27 @@ fn assemble_file(config: Config)
         let page = encoder.ready();
         file.write_all(page)?;
         let consumed = page.len();
+        length += consumed;
         encoder.consume(consumed);
     }
 
-    file.write_all(encoder.tail()).map(Ok)
+    file.write_all(encoder.tail())?;
+    length += encoder.tail().len();
+
+    Ok(Ok(FileResult {
+        length: length as u64,
+    }))
 }
 
 fn basic_show_data(slide: &Slide)
     -> Result<Result<SlideShow<'static>, Error>, io::Error>
 {
-    let reader = image::io::Reader::open(&slide.image)?;
+    let reader = ImageReader::open(&slide.image)?;
 
     let (width, height) = match reader.into_dimensions() {
         Ok(dims) => dims,
-        Err(image::ImageError::IoError(io)) => return Err(io),
-        Err(_other) => return Ok(Err(Error)),
+        Err(ImageError::IoError(io)) => return Err(io),
+        Err(err) => return Ok(Err(err.into())),
     };
 
     Ok(Ok(SlideShow {
@@ -103,7 +112,7 @@ enum CallResult {
     #[serde(rename = "error")] 
     Err(String),
     #[serde(rename = "ok")] 
-    Ok,
+    Ok(FileResult),
 }
 
 #[derive(Deserialize)]
@@ -112,6 +121,11 @@ struct Config {
     slides: Vec<Slide>,
     #[serde(default = "PagedVec::default_memory")]
     memory: usize,
+}
+
+#[derive(Serialize)]
+struct FileResult {
+    length: u64,
 }
 
 #[derive(Deserialize)]
@@ -126,6 +140,8 @@ pub struct Slide {
     pub subtitles: HashMap<String, Subtitle>,
     /// A title name to give to this frame.
     pub chapter: Option<Chapter>,
+    /// How many seconds this slide should last.
+    pub seconds: f32,
 }
 
 #[derive(Deserialize)]
