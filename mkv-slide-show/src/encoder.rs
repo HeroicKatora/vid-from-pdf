@@ -86,8 +86,8 @@ impl<'slides> Encoder<'slides> {
     const TIMESCALE: u32 = 1_000_000;
     const APP_NAME: &'static str = "VFP-Core-1.0.0";
 
-    const TRACK_VIDEO: u64 = 0;
-    // const TRACK_AUDIO: u64 = 1;
+    const TRACK_VIDEO: u64 = 1;
+    // const TRACK_AUDIO: u64 = 2;
 
     pub fn new(show: &SlideShow<'slides>, vec: PagedVec) -> Self {
         let audio = AudioTrack {
@@ -126,7 +126,9 @@ impl<'slides> Encoder<'slides> {
                     Err(other) => return Ok(Err(other)),
                 }
 
+                self.state.passed_time += self.slides[frame].seconds;
                 let next_frame = frame + 1;
+
                 if next_frame == self.slides.len() {
                     self.encode_cluster_end();
                     self.progress = Progress::Done;
@@ -140,7 +142,7 @@ impl<'slides> Encoder<'slides> {
     }
 
     /// All full pages of memory of completed file.
-    pub fn ready(&self) -> &[u8] {
+    pub fn ready(&self) -> impl std::ops::Deref<Target=[u8]> + '_ {
         self.vec.ready()
     }
 
@@ -155,11 +157,30 @@ impl<'slides> Encoder<'slides> {
     }
 
     /// All the remaining data after decoding was done.
-    pub fn tail(&self) -> &[u8] {
+    pub fn tail(&self) -> impl std::ops::Deref<Target=[u8]> + '_ {
         self.vec.ready()
     }
 
     fn encode_info(&mut self) {
+        let _ = self.writer().write(
+            &MatroskaSpec::Ebml(Master::Start));
+        let _ = self.writer().write(
+            &MatroskaSpecExt::EbmlVersion(1));
+        let _ = self.writer().write(
+            &MatroskaSpecExt::EbmlReadVersion(1));
+        let _ = self.writer().write(
+            &MatroskaSpec::EbmlMaxIdLength(4));
+        let _ = self.writer().write(
+            &MatroskaSpec::EbmlMaxSizeLength(8));
+        let _ = self.writer().write(
+            &MatroskaSpecExt::EbmlDocType("webm".into()));
+        let _ = self.writer().write(
+            &MatroskaSpecExt::EbmlDocTypeVersion(4));
+        let _ = self.writer().write(
+            &MatroskaSpecExt::EbmlDocTypeReadVersion(2));
+        let _ = self.writer().write(
+            &MatroskaSpec::Ebml(Master::End));
+
         let _ = self.writer().write(
             &MatroskaSpec::Segment(Master::Start));
         let _ = self.writer().write(
@@ -170,6 +191,15 @@ impl<'slides> Encoder<'slides> {
             &MatroskaSpec::MuxingApp(Self::APP_NAME.into()));
         let _ = self.writer().write(
             &MatroskaSpec::WritingApp(Self::APP_NAME.into()));
+        let total = self.slides
+            .iter()
+            .fold(0.0, |ts, slide| ts + slide.seconds);
+        let total_ns = f64::from(total) * 1_000_000_000f64
+            / f64::from(Self::TIMESCALE);
+        let _ = self.writer().write(
+            &MatroskaSpec::Duration(total_ns));
+        let _ = self.writer().write(
+            &MatroskaSpec::FrameRate(0.00001));
         let _ = self.writer().write(
             &MatroskaSpec::Info(Master::End));
     }
@@ -243,40 +273,46 @@ impl<'slides> Encoder<'slides> {
         }
 
         // The data, note that we encode the timestamp in the cluster.
-        let data = self.encode_frame_block(0u8, 0i16, image);
+        let data = self.encode_frame_block(Self::TRACK_VIDEO, 0i16, image);
 
         let _ = self.writer().write(
             &MatroskaSpec::Cluster(Master::Start));
-        let ts = self.passed_time_as_timecode();
+        let ts = self.time_as_timecode(self.state.passed_time);
         let _ = self.writer().write(
             &MatroskaSpec::Timecode(ts));
+        let dur = self.time_as_timecode(frame.seconds);
         let _ = self.writer().write(
-            &MatroskaSpec::Position(idx as u64));
+            &MatroskaSpec::BlockGroup(Master::Start));
         let _ = self.writer().write(
-            &MatroskaSpec::SimpleBlock(data));
+            &MatroskaSpec::Block(data));
+        let _ = self.writer().write(
+            &MatroskaSpec::BlockDuration(dur));
+        let _ = self.writer().write(
+            &MatroskaSpec::BlockGroup(Master::End));
         let _ = self.writer().write(
             &MatroskaSpec::Cluster(Master::End));
-
-        self.state.passed_time += frame.seconds;
 
         Ok(Ok(()))
     }
 
-    fn encode_frame_block(&self, num: u8, ts: i16, frame: image::DynamicImage)
+    fn encode_frame_block(&self, num: u64, ts: i16, frame: image::DynamicImage)
         -> Vec<u8>
     {
+        let frame = image::DynamicImage::ImageRgba8(frame.to_rgba8());
+        assert!(num < 0x80, "Multi-byte track number not implemented");
+        let num = (num | 0x80) as u8;
         let [ts0, ts1] = ts.to_be_bytes();
         let mut vec = vec![num, ts0, ts1, 0x00];
         vec.extend_from_slice(frame.as_bytes());
         vec
     }
 
-    fn passed_time_as_timecode(&self) -> u64 {
-        let ts = f64::from(self.state.passed_time) * f64::from(Self::TIMESCALE);
+    fn time_as_timecode(&self, secs: f32) -> u64 {
+        let ts = f64::from(secs) * f64::from(1_000_000_000) / f64::from(Self::TIMESCALE);
         ts.round() as u64
     }
 
-    fn writer(&mut self) -> WebmWriter<&'_ mut dyn io::Write> {
+    fn writer(&mut self) -> &'_ mut WebmWriter<impl io::Write> {
         self.vec.writer()
     }
 
@@ -289,7 +325,7 @@ impl<'slides> Encoder<'slides> {
 }
 
 impl VideoTrack {
-    fn encode(&self, mut writer: WebmWriter<&'_ mut dyn io::Write>) {
+    fn encode(&self, writer: &mut WebmWriter<impl io::Write>) {
         let _ = writer.write(
             &MatroskaSpec::Video(Master::Start));
         let _ = writer.write(
@@ -297,7 +333,7 @@ impl VideoTrack {
         let _ = writer.write(
             &MatroskaSpec::PixelHeight(self.height.into()));
         let _ = writer.write(
-            &MatroskaSpec::ColourSpace(b"RGB2".to_vec()));
+            &MatroskaSpec::ColourSpace(b"RGBA".to_vec()));
         let _ = writer.write(
             &MatroskaSpecExt::Color(Master::Start));
         let _ = writer.write(

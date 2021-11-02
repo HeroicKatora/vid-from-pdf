@@ -10,7 +10,8 @@ use self::encoder::{Encoder, Error, ErrorKind, SlideShow};
 use self::paged_vec::PagedVec;
 
 fn main() {
-    if let Err(_) = main_with_stdio() {
+    if let Err(err) = main_with_stdio() {
+        eprintln!("{:?}", err);
         process::exit(2);
     }
 }
@@ -73,14 +74,18 @@ fn assemble_file(config: Config)
         }
 
         let page = encoder.ready();
-        file.write_all(page)?;
+        file.write_all(&*page)?;
         let consumed = page.len();
+        drop(page);
+
         length += consumed;
         encoder.consume(consumed);
     }
 
-    file.write_all(encoder.tail())?;
-    length += encoder.tail().len();
+    let tail = encoder.tail();
+    file.write_all(&*tail)?;
+    length += tail.len();
+    drop(tail);
 
     Ok(Ok(FileResult {
         length: length as u64,

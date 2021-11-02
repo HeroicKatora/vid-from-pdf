@@ -22,8 +22,10 @@ fn test_data_pdf() {
         })
         .collect();
 
+    let _ = std::fs::remove_file(std::path::Path::new(TEST_PATH).join("vid.mkv"));
+
     let input = json!({
-        "target": tmpdir.path().join("vid.mkv"),
+        "target": std::path::Path::new(TEST_PATH).join("vid.mkv"),
         "slides": slides,
         "memory": 1 << 30,
     });
@@ -36,6 +38,8 @@ fn test_data_pdf() {
         .write_stdin(input)
         .assert()
         .success();
+    eprintln!("{:?}", String::from_utf8_lossy(&out.get_output().stderr));
+
     let out = &out
         .get_output()
         .stdout;
