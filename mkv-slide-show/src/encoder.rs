@@ -121,7 +121,7 @@ impl<'slides> Encoder<'slides> {
                 self.progress = Progress::BeforeFrame(0);
             },
             Progress::BeforeFrame(frame) => {
-                match self.encode_frame(frame)?{
+                match self.encode_frame(frame)? {
                     Ok(()) => {},
                     Err(other) => return Ok(Err(other)),
                 }
@@ -130,6 +130,14 @@ impl<'slides> Encoder<'slides> {
                 let next_frame = frame + 1;
 
                 if next_frame == self.slides.len() {
+                    // Not sure why, but encode the last frame twice more with no duration.
+                    // For some reason this is required to make it show the intended time?
+                    // Just going off vlc here and it should not have any impact according
+                    // to my understanding of clusters and timecodes. But I did not find
+                    // a specification for V_UNCOMPRESSED that went beyond: has raw pixel
+                    // data for all frames.
+                    let _ = self.encode_frame_with_duration(frame, Some(0.0))?;
+                    let _ = self.encode_frame_with_duration(frame, Some(0.0))?;
                     self.encode_cluster_end();
                     self.progress = Progress::Done;
                 } else {
@@ -227,15 +235,13 @@ impl<'slides> Encoder<'slides> {
         let _ = self.writer().write(
             &MatroskaSpec::FlagLacing(0));
         let _ = self.writer().write(
-            &MatroskaSpec::MinCache(0));
-        let _ = self.writer().write(
-            &MatroskaSpec::MaxBlockAdditionId(0));
-        let _ = self.writer().write(
             &MatroskaSpec::CodecId("V_UNCOMPRESSED".into()));
         let _ = self.writer().write(
             &MatroskaSpec::CodecDecodeAll(0));
         let _ = self.writer().write(
             &MatroskaSpec::SeekPreRoll(0));
+        let _ = self.writer().write(
+            &MatroskaSpec::DefaultDuration(1_000_000_000));
         self.video.encode(self.vec.writer());
         let _ = self.writer().write(
             &MatroskaSpec::TrackEntry(Master::End));
@@ -250,6 +256,10 @@ impl<'slides> Encoder<'slides> {
 
     fn encode_cluster_end(&mut self) {
         let _ = self.writer().write(
+            &MatroskaSpec::Cues(Master::Start));
+        let _ = self.writer().write(
+            &MatroskaSpec::Cues(Master::End));
+        let _ = self.writer().write(
             &MatroskaSpec::Segment(Master::End));
     }
 
@@ -257,6 +267,12 @@ impl<'slides> Encoder<'slides> {
     /// This can fail if the new frame is not the correct width/height, it's corrupt, or if the IO
     /// for loading the frame fails.
     fn encode_frame(&mut self, idx: usize)
+        -> Result<Result<(), Error>, io::Error>
+    {
+        self.encode_frame_with_duration(idx, None)
+    }
+
+    fn encode_frame_with_duration(&mut self, idx: usize, duration: Option<f32>)
         -> Result<Result<(), Error>, io::Error>
     {
         let ref frame = self.slides[idx];
@@ -280,13 +296,14 @@ impl<'slides> Encoder<'slides> {
         let ts = self.time_as_timecode(self.state.passed_time);
         let _ = self.writer().write(
             &MatroskaSpec::Timecode(ts));
-        let dur = self.time_as_timecode(frame.seconds);
+        let duration = duration.unwrap_or(frame.seconds);
+        let duration = self.time_as_timecode(duration);
         let _ = self.writer().write(
             &MatroskaSpec::BlockGroup(Master::Start));
+        let _ = self.writer().write_raw(
+            0xa1, &data[..]);
         let _ = self.writer().write(
-            &MatroskaSpec::Block(data));
-        let _ = self.writer().write(
-            &MatroskaSpec::BlockDuration(dur));
+            &MatroskaSpec::BlockDuration(duration));
         let _ = self.writer().write(
             &MatroskaSpec::BlockGroup(Master::End));
         let _ = self.writer().write(
@@ -328,6 +345,8 @@ impl VideoTrack {
     fn encode(&self, writer: &mut WebmWriter<impl io::Write>) {
         let _ = writer.write(
             &MatroskaSpec::Video(Master::Start));
+        let _ = writer.write(
+            &MatroskaSpec::FlagInterlaced(2));
         let _ = writer.write(
             &MatroskaSpec::PixelWidth(self.width.into()));
         let _ = writer.write(

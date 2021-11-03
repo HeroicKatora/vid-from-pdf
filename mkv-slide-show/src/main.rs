@@ -87,6 +87,8 @@ fn assemble_file(config: Config)
     length += tail.len();
     drop(tail);
 
+    file.flush()?;
+
     Ok(Ok(FileResult {
         length: length as u64,
     }))
