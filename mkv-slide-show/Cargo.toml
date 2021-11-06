@@ -4,6 +4,8 @@ version = "0.0.0"
 edition = "2018"
 description = "Convert images and durations into a slide show video"
 
+[dependencies.bytemuck]
+version = "1.7"
 [dependencies.ebml-iterable]
 version = "0.3"
 [dependencies.image]

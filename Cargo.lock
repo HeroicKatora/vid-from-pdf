@@ -469,9 +469,9 @@ dependencies = [
 
 [[package]]
 name = "bytemuck"
-version = "1.4.1"
+version = "1.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41aa2ec95ca3b5c54cf73c91acf06d24f4495d5f1b1c12506ae3483d646177ac"
+checksum = "72957246c41db82b8ef88a5486143830adeb8227ef9837740bdec67724cf2c5b"
 
 [[package]]
 name = "byteorder"
@@ -1554,6 +1554,7 @@ name = "mkv-slide-show"
 version = "0.0.0"
 dependencies = [
  "assert_cmd",
+ "bytemuck",
  "ebml-iterable",
  "image",
  "serde",

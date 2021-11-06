@@ -9,15 +9,22 @@ fn test_data_pdf() {
     let tmpdir = TempDir::new_in(env!("CARGO_TARGET_TMPDIR"))
         .expect("successfully create a tempdir");
 
+    let duration: &'static [f32] = &[
+        1.42,
+        18.99,
+        4.94,
+    ];
+
     let slides: Vec<_> = (0..3)
         .map(|n| {
             let page = format!("{}page-{}.ppm", TEST_PATH, n);
+            let wav = format!("{}espeak-{}.wav", TEST_PATH, n);
             json!({
                 "image": page,
-                "audio": "",
+                "audio": wav,
                 "subtitles": {},
                 "chapter": null,
-                "seconds": 1.0,
+                "seconds": duration[n],
             })
         })
         .collect();

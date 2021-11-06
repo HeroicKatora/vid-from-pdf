@@ -112,13 +112,9 @@ fn basic_show_data(slide: &Slide)
         &mut audio_file
     });
 
-    let (header, _) = match reader {
+    let (header, _) = match convert_wav_result(reader) {
         Ok(items) => items,
-        // `wav` signals a decoding failure like this.
-        Err(io) if io.kind() == io::ErrorKind::Other => {
-            return Ok(Err(ErrorKind::Wav(io).into()));
-        },
-        Err(io) => return Err(io),
+        Err(other) => return other.map(Err),
     };
 
     let sps = header.bytes_per_second / u32::from(header.bytes_per_sample);
@@ -134,6 +130,19 @@ fn basic_show_data(slide: &Slide)
             bits_per_sample: header.bits_per_sample,
         },
     }))
+}
+
+fn convert_wav_result<T>(result: Result<T, io::Error>)
+    -> Result<T, Result<Error, io::Error>>
+{
+    match result {
+        Ok(items) => Ok(items),
+        // `wav` signals a decoding failure like this.
+        Err(io) if io.kind() == io::ErrorKind::Other => {
+            return Err(Ok(ErrorKind::Wav(io).into()));
+        },
+        Err(io) => return Err(Err(io)),
+    }
 }
 
 #[derive(Serialize)]

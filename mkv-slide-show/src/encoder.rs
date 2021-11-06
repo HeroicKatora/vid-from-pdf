@@ -88,10 +88,8 @@ struct AudioTrack {
 /// some of the tags of the track, or in the tags of the cluster. Notably we calculate a new audio
 /// offset based on the index of the first sample in this slice and the original sample rate.
 struct PcmSlice<'data> {
-    /// A floating point? What is this madness? Relax, it's fine.
-    /// We only lose relevant precision from 2**43 seconds forwards. (A bit sooner due to
-    /// intermediate calculation but anyways, good enough).
-    secs: f64,
+    /// The offset of the data (in time scaling).
+    offset: u64,
     /// The raw data to be put into the block.
     data: &'data [u8],
 }
@@ -112,7 +110,7 @@ impl<'slides> Encoder<'slides> {
     const APP_NAME: &'static str = "VFP-Core-1.0.0";
 
     const TRACK_VIDEO: u64 = 1;
-    // const TRACK_AUDIO: u64 = 2;
+    const TRACK_AUDIO: u64 = 2;
 
     pub fn new(show: &SlideShow<'slides>, vec: PagedVec) -> Self {
         let audio = match show.audio {
@@ -274,6 +272,37 @@ impl<'slides> Encoder<'slides> {
         let _ = self.writer().write(
             &MatroskaSpec::TrackEntry(Master::End));
 
+        // Audio track:
+        let _ = self.writer().write(
+            &MatroskaSpec::TrackEntry(Master::Start));
+        let _ = self.writer().write(
+            &MatroskaSpec::TrackNumber(Self::TRACK_AUDIO));
+        let uid = self.mk_track_uid();
+        let _ = self.writer().write(
+            &MatroskaSpec::TrackUid(uid));
+        let _ = self.writer().write(
+            &MatroskaSpec::TrackType(2));
+        let _ = self.writer().write(
+            &MatroskaSpec::FlagEnabled(1));
+        let _ = self.writer().write(
+            &MatroskaSpec::FlagDefault(1));
+        let _ = self.writer().write(
+            &MatroskaSpec::FlagForced(0));
+        let _ = self.writer().write(
+            &MatroskaSpec::FlagLacing(0));
+        let codec_id = self.audio.pcm_format();
+        let _ = self.writer().write(
+            &MatroskaSpec::CodecId(codec_id));
+        let _ = self.writer().write(
+            &MatroskaSpec::CodecDecodeAll(0));
+        let _ = self.writer().write(
+            &MatroskaSpec::SeekPreRoll(0));
+        let _ = self.writer().write(
+            &MatroskaSpec::DefaultDuration(1_000_000_000));
+        self.audio.encode(self.vec.writer());
+        let _ = self.writer().write(
+            &MatroskaSpec::TrackEntry(Master::End));
+
         let _ = self.writer().write(
             &MatroskaSpec::Tracks(Master::End));
     }
@@ -316,8 +345,16 @@ impl<'slides> Encoder<'slides> {
             return Ok(Err(ErrorKind::MismatchingDimensions.into()));
         }
 
+        // Only when we do not use override.
+        if let None = duration {
+            match self.encode_audio_chunks(idx) {
+                Ok(Ok(_)) => {},
+                other => return other,
+            }
+        }
+
         // The data, note that we encode the timestamp in the cluster.
-        let data = self.encode_frame_block(Self::TRACK_VIDEO, 0i16, image);
+        let data = self.build_frame_block(Self::TRACK_VIDEO, 0i16, image);
 
         let _ = self.writer().write(
             &MatroskaSpec::Cluster(Master::Start));
@@ -340,16 +377,64 @@ impl<'slides> Encoder<'slides> {
         Ok(Ok(()))
     }
 
-    fn encode_frame_block(&self, num: u64, ts: i16, frame: image::DynamicImage)
-        -> Vec<u8>
+    fn encode_audio_chunks(&mut self, idx: usize)
+        -> Result<Result<(), Error>, io::Error>
     {
-        let frame = image::DynamicImage::ImageRgba8(frame.to_rgba8());
+        let ref frame = self.slides[idx];
+        let mut audiofile;
+        let audiofile = wav::read({
+            audiofile = std::fs::File::open(&frame.audio)?;
+            &mut audiofile
+        });
+
+        // FIXME: should check that the wav data kind matches the header.
+        let (_, mut data) = match super::convert_wav_result(audiofile) {
+            Ok(items) => items,
+            Err(other) => return other.map(Err),
+        };
+
+        for pcm in self.audio.pcm_chunk(&mut data) {
+            let data = self.build_pcm_block(Self::TRACK_AUDIO, 0i16, pcm.data);
+
+            let _ = self.writer().write(
+                &MatroskaSpec::Cluster(Master::Start));
+            let ts = self.time_as_timecode(self.state.passed_time);
+            let ts = ts + pcm.offset;
+            let _ = self.writer().write(
+                &MatroskaSpec::Timecode(ts));
+            let _ = self.writer().write(
+                &MatroskaSpec::BlockGroup(Master::Start));
+            let _ = self.writer().write_raw(
+                0xa1, &data[..]);
+            let _ = self.writer().write(
+                &MatroskaSpec::BlockGroup(Master::End));
+            let _ = self.writer().write(
+                &MatroskaSpec::Cluster(Master::End));
+        }
+
+        Ok(Ok(()))
+    }
+
+    fn build_block(&self, num: u64, ts: i16, data: &[u8]) -> Vec<u8> {
         assert!(num < 0x80, "Multi-byte track number not implemented");
         let num = (num | 0x80) as u8;
         let [ts0, ts1] = ts.to_be_bytes();
         let mut vec = vec![num, ts0, ts1, 0x00];
-        vec.extend_from_slice(frame.as_bytes());
+        vec.extend_from_slice(data);
         vec
+    }
+
+    fn build_frame_block(&self, num: u64, ts: i16, frame: image::DynamicImage)
+        -> Vec<u8>
+    {
+        let frame = image::DynamicImage::ImageRgba8(frame.to_rgba8());
+        self.build_block(num, ts, frame.as_bytes())
+    }
+
+    fn build_pcm_block(&self, num: u64, ts: i16, data: &[u8])
+        -> Vec<u8>
+    {
+        self.build_block(num, ts, data)
     }
 
     fn time_as_timecode(&self, secs: f32) -> u64 {
@@ -429,17 +514,50 @@ impl AudioTrack {
         "A_PCM/FLOAT/IEEE".into()
     }
 
-    /// Data for the `Audio.BitDepth` element.
-    fn bit_depth(&self) -> u64 {
-        todo!()
-    }
-
     /// Get one chunk of data for this cluster.
-    fn pcm_chunk(&self, data: &wav::BitDepth)
-        -> impl Iterator<Item=PcmSlice<'_>> + '_
+    fn pcm_chunk<'data>(&self, data: &'data mut wav::BitDepth)
+        -> impl Iterator<Item=PcmSlice<'data>> + 'data
     {
-        todo!();
-        ::core::iter::empty()
+        let chunk_len_ms = 33;
+        let sampling_frequency = self.sampling_frequency;
+        let count = (sampling_frequency / chunk_len_ms) as usize;
+
+        let chunks: Box<dyn Iterator<Item=&[u8]>> = match data {
+            wav::BitDepth::Empty => unreachable!(),
+            wav::BitDepth::Eight(data) => {
+                Box::new(data.chunks(count))
+            },
+            wav::BitDepth::Sixteen(data) => {
+                Box::new(data.chunks(count).map(bytemuck::cast_slice))
+            },
+            wav::BitDepth::TwentyFour(_) => {
+                unimplemented!("Not contiguous in memory, need different strategy.")
+            },
+            wav::BitDepth::ThirtyTwoFloat(data) => {
+                // We MUST use little endian here.
+                let raw = bytemuck::cast_slice_mut::<_, [u8; 4]>(data);
+
+                raw
+                    .iter_mut()
+                    .for_each(|val| {
+                        *val = u32::from_ne_bytes(*val).to_ne_bytes();
+                    });
+
+                Box::new(data.chunks(count).map(bytemuck::cast_slice))
+            },
+        };
+
+        chunks
+            .scan(0, move |num, data| {
+                let secs = (*num) as f64 / f64::from(sampling_frequency);
+                let offset = secs * f64::from(1_000_000_000) / f64::from(Encoder::TIMESCALE);
+                *num += count;
+
+                Some(PcmSlice {
+                    offset: offset as u64,
+                    data,
+                })
+            })
     }
 }
 
