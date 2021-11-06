@@ -20,7 +20,11 @@ pub enum Color {
 }
 
 pub enum Audio {
-    Raw16BitLE,
+    Pcm {
+        sampling_frequency: u32,
+        channels: u16,
+        bits_per_sample: u16,
+    }
 }
 
 pub struct SlideShow<'slides> {
@@ -60,6 +64,7 @@ pub struct Error {
 #[derive(Debug)]
 pub enum ErrorKind {
     Image(ImageError),
+    Wav(std::io::Error),
     MismatchingDimensions,
     EmptySequence,
 }
@@ -69,6 +74,26 @@ pub enum ErrorKind {
 /// That is, the Matroska mapped version that we computed from the input parameters—the string
 /// name, the sampling frequency, the track ID etc.
 struct AudioTrack {
+    /// Sampling frequency for the EBML `Audio.SamplingFrequency` field.
+    /// Also calculating an exact timestamp of a chunk after a number of samples.
+    sampling_frequency: u32,
+    /// Number of channels for the EBML `Audio.Channels` field.
+    channels: u16,
+    /// Number of channels for the EBML `Audio.BitDepth` field.
+    bits_per_sample: u16,
+}
+
+/// One block of PCM data.
+/// Most of the data that usually occurs in the .wav/riff header and block header is out-of-band in
+/// some of the tags of the track, or in the tags of the cluster. Notably we calculate a new audio
+/// offset based on the index of the first sample in this slice and the original sample rate.
+struct PcmSlice<'data> {
+    /// A floating point? What is this madness? Relax, it's fine.
+    /// We only lose relevant precision from 2**43 seconds forwards. (A bit sooner due to
+    /// intermediate calculation but anyways, good enough).
+    secs: f64,
+    /// The raw data to be put into the block.
+    data: &'data [u8],
 }
 
 /// The 'interface' of how we chose to encode video.
@@ -90,7 +115,10 @@ impl<'slides> Encoder<'slides> {
     // const TRACK_AUDIO: u64 = 2;
 
     pub fn new(show: &SlideShow<'slides>, vec: PagedVec) -> Self {
-        let audio = AudioTrack {
+        let audio = match show.audio {
+            Audio::Pcm { sampling_frequency, channels, bits_per_sample } => {
+                AudioTrack { sampling_frequency, channels, bits_per_sample }
+            }
         };
 
         let video = VideoTrack {
@@ -325,7 +353,11 @@ impl<'slides> Encoder<'slides> {
     }
 
     fn time_as_timecode(&self, secs: f32) -> u64 {
-        let ts = f64::from(secs) * f64::from(1_000_000_000) / f64::from(Self::TIMESCALE);
+        self.time_as_timecode_f64(f64::from(secs))
+    }
+
+    fn time_as_timecode_f64(&self, secs: f64) -> u64 {
+        let ts = secs * f64::from(1_000_000_000) / f64::from(Self::TIMESCALE);
         ts.round() as u64
     }
 
@@ -368,6 +400,46 @@ impl VideoTrack {
         // FIXME: should write Color::start etc.
         let _ = writer.write(
             &MatroskaSpec::Video(Master::End));
+    }
+}
+
+impl AudioTrack {
+    fn encode(&self, writer: &mut WebmWriter<impl io::Write>) {
+        let _ = writer.write(
+            &MatroskaSpec::Audio(Master::Start));
+        let _ = writer.write(
+            &MatroskaSpec::SamplingFrequency(self.sampling_frequency.into()));
+        let _ = writer.write(
+            &MatroskaSpec::Channels(self.channels.into()));
+        let _ = writer.write(
+            &MatroskaSpec::BitDepth(self.bits_per_sample.into()));
+        let _ = writer.write(
+            &MatroskaSpec::Audio(Master::End));
+    }
+
+    /// The precise, full coded format.
+    fn pcm_format(&self) -> String {
+        match 1u16.to_be_bytes() == 1u16.to_ne_bytes() {
+            true => "A_PCM/INT/BIG".into(),
+            false => "A_PCM/INT/LIT".into(),
+        }
+    }
+
+    fn float_format(&self) -> String {
+        "A_PCM/FLOAT/IEEE".into()
+    }
+
+    /// Data for the `Audio.BitDepth` element.
+    fn bit_depth(&self) -> u64 {
+        todo!()
+    }
+
+    /// Get one chunk of data for this cluster.
+    fn pcm_chunk(&self, data: &wav::BitDepth)
+        -> impl Iterator<Item=PcmSlice<'_>> + '_
+    {
+        todo!();
+        ::core::iter::empty()
     }
 }
 

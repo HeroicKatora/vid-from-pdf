@@ -105,12 +105,34 @@ fn basic_show_data(slide: &Slide)
         Err(err) => return Ok(Err(err.into())),
     };
 
+    let mut audio_file;
+    // FIXME: really we only need the header here but oh well.
+    let reader = wav::read({
+        audio_file = fs::File::open(&slide.audio)?;
+        &mut audio_file
+    });
+
+    let (header, _) = match reader {
+        Ok(items) => items,
+        // `wav` signals a decoding failure like this.
+        Err(io) if io.kind() == io::ErrorKind::Other => {
+            return Ok(Err(ErrorKind::Wav(io).into()));
+        },
+        Err(io) => return Err(io),
+    };
+
+    let sps = header.bytes_per_second / u32::from(header.bytes_per_sample);
+
     Ok(Ok(SlideShow {
         slides: &[],
         width,
         height,
         color: encoder::Color::Srgb,
-        audio: encoder::Audio::Raw16BitLE,
+        audio: encoder::Audio::Pcm {
+            sampling_frequency: sps,
+            channels: header.channel_count,
+            bits_per_sample: header.bits_per_sample,
+        },
     }))
 }
 
