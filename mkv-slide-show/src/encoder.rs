@@ -147,12 +147,29 @@ impl<'slides> Encoder<'slides> {
                 self.progress = Progress::BeforeFrame(0);
             },
             Progress::BeforeFrame(frame) => {
-                match self.encode_frame(frame)? {
-                    Ok(()) => {},
-                    Err(other) => return Ok(Err(other)),
+                let seconds = self.slides[frame].seconds;
+                let pastframe = self.state.passed_time + seconds;
+
+                match self.encode_audio_chunks(frame) {
+                    Ok(Ok(_)) => {},
+                    other => return other,
                 }
 
-                self.state.passed_time += self.slides[frame].seconds;
+                let mut passed = 0.0;
+                while {
+                    let length = (seconds - passed).min(1.0);
+                    match self.encode_frame_with_duration(frame, Some(length))? {
+                        Ok(()) => {},
+                        Err(other) => return Ok(Err(other)),
+                    }
+                    self.state.passed_time += length;
+                    passed += length;
+                    passed + 0.1 < seconds
+                }{}
+
+                self.state.passed_time = pastframe;
+                self.state.passed_time += 0.1;
+
                 let next_frame = frame + 1;
 
                 if next_frame == self.slides.len() {
@@ -162,7 +179,6 @@ impl<'slides> Encoder<'slides> {
                     // to my understanding of clusters and timecodes. But I did not find
                     // a specification for V_UNCOMPRESSED that went beyond: has raw pixel
                     // data for all frames.
-                    let _ = self.encode_frame_with_duration(frame, Some(0.0))?;
                     let _ = self.encode_frame_with_duration(frame, Some(0.0))?;
                     self.encode_cluster_end();
                     self.progress = Progress::Done;
@@ -233,8 +249,6 @@ impl<'slides> Encoder<'slides> {
         let _ = self.writer().write(
             &MatroskaSpec::Duration(total_ns));
         let _ = self.writer().write(
-            &MatroskaSpec::FrameRate(0.00001));
-        let _ = self.writer().write(
             &MatroskaSpec::Info(Master::End));
     }
 
@@ -247,7 +261,7 @@ impl<'slides> Encoder<'slides> {
             &MatroskaSpec::TrackEntry(Master::Start));
         let _ = self.writer().write(
             &MatroskaSpec::TrackNumber(Self::TRACK_VIDEO));
-        let uid = self.mk_track_uid();
+        let uid = self.mk_track_uid(Self::TRACK_VIDEO);
         let _ = self.writer().write(
             &MatroskaSpec::TrackUid(uid));
         let _ = self.writer().write(
@@ -277,7 +291,7 @@ impl<'slides> Encoder<'slides> {
             &MatroskaSpec::TrackEntry(Master::Start));
         let _ = self.writer().write(
             &MatroskaSpec::TrackNumber(Self::TRACK_AUDIO));
-        let uid = self.mk_track_uid();
+        let uid = self.mk_track_uid(Self::TRACK_AUDIO);
         let _ = self.writer().write(
             &MatroskaSpec::TrackUid(uid));
         let _ = self.writer().write(
@@ -323,6 +337,7 @@ impl<'slides> Encoder<'slides> {
     /// Encode a single frame with our coded (V_UNCOMPRESSED).
     /// This can fail if the new frame is not the correct width/height, it's corrupt, or if the IO
     /// for loading the frame fails.
+    #[allow(dead_code)]
     fn encode_frame(&mut self, idx: usize)
         -> Result<Result<(), Error>, io::Error>
     {
@@ -343,14 +358,6 @@ impl<'slides> Encoder<'slides> {
 
         if image.dimensions() != (self.video.width, self.video.height) {
             return Ok(Err(ErrorKind::MismatchingDimensions.into()));
-        }
-
-        // Only when we do not use override.
-        if let None = duration {
-            match self.encode_audio_chunks(idx) {
-                Ok(Ok(_)) => {},
-                other => return other,
-            }
         }
 
         // The data, note that we encode the timestamp in the cluster.
@@ -450,10 +457,10 @@ impl<'slides> Encoder<'slides> {
         self.vec.writer()
     }
 
-    fn mk_track_uid(&self) -> u64 {
+    fn mk_track_uid(&self, id: u64) -> u64 {
         use std::hash::{Hash, Hasher};
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        0u64.hash(&mut hasher);
+        id.hash(&mut hasher);
         hasher.finish()
     }
 }
