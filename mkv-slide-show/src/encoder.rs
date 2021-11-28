@@ -156,6 +156,17 @@ impl<'slides> Encoder<'slides> {
                 }
 
                 let mut passed = 0.0;
+                // FIXME: duplicate frame. Usage of Theora would fix this with minimal overhead:
+                //
+                // > Additionally, zero-length packets are treated as if they were an inter frame
+                // with no blocks coded. That is, as a duplicate frame.
+                // > -- Theora 3.2, Packet Type Decode.
+                //
+                // The only real downside is that Theora is constant frame rate. The mentioned
+                // scheme might be sufficient compensation because lacing can give us significant
+                // punch of frames-per-byte (To be tested).
+                //
+                // <https://www.theora.org/doc/Theora.pdf>
                 while {
                     let length = (seconds - passed).min(1.0);
                     match self.encode_frame_with_duration(frame, Some(length))? {

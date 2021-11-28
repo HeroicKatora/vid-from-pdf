@@ -1,6 +1,7 @@
 mod encoder;
 mod missing_specs;
 mod paged_vec;
+mod theora;
 
 use std::{collections::HashMap, io, io::Write, fs, path::PathBuf, process};
 use image::{io::Reader as ImageReader, ImageError};
